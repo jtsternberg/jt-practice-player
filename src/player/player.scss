@@ -566,6 +566,10 @@
 	background: var(--jtpp-panel);
 }
 
+.jtpp-fallback[hidden] {
+	display: none;
+}
+
 .jtpp-fallback p {
 	margin: 0;
 	color: var(--jtpp-muted);

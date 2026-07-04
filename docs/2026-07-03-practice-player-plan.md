@@ -308,12 +308,15 @@ git commit -m "feat(practice-player): loop-engine pure logic with unit tests"
 - Produces:
   - `loadTrackState( trackId: number, storage? ): {loopStart,loopEnd,loopOn,position,rate}|null`
   - `saveTrackState( trackId: number, state: object, storage?, now?: number ): void` — also prunes entries older than 90 days.
-  - Storage keys: `jtpp:<trackId>`. All failures swallowed (persistence is an enhancement, never load-bearing).
+  - `loadQueue( trackIds: number[], storage? ): number[]` — checked attachment IDs for this playlist; defaults to ALL of `trackIds` when nothing stored.
+  - `saveQueue( trackIds: number[], checkedIds: number[], storage? ): void` — key `jtpp:queue:<trackIds.join('-')>` (self-invalidates when the playlist changes).
+  - `loadVolume( storage? ): number` (default 1) / `saveVolume( volume: number, storage? ): void` — global key `jtpp:volume`.
+  - Storage keys: `jtpp:<trackId>`, `jtpp:queue:<ids>`, `jtpp:volume`. All failures swallowed (persistence is an enhancement, never load-bearing).
 
 - [ ] **Step 1: Write the failing tests** — `src/player/test/persistence.test.js`:
 
 ```js
-import { loadTrackState, saveTrackState } from '../persistence';
+import { loadTrackState, saveTrackState, loadQueue, saveQueue, loadVolume, saveVolume } from '../persistence';
 
 function memoryStorage() {
 	const map = new Map();
@@ -351,6 +354,22 @@ describe( 'persistence', () => {
 		saveTrackState( 2, state, s, 91 * DAY );
 		expect( loadTrackState( 1, s ) ).toBeNull();
 		expect( loadTrackState( 2, s ) ).toMatchObject( state );
+	} );
+	it( 'defaults the queue to all tracks', () => {
+		expect( loadQueue( [ 1, 2, 3 ], memoryStorage() ) ).toEqual( [ 1, 2, 3 ] );
+	} );
+	it( 'round-trips the queue, keyed by the track list', () => {
+		const s = memoryStorage();
+		saveQueue( [ 1, 2, 3 ], [ 1, 3 ], s );
+		expect( loadQueue( [ 1, 2, 3 ], s ) ).toEqual( [ 1, 3 ] );
+		// Different playlist (changed tracks) falls back to all-checked:
+		expect( loadQueue( [ 1, 2, 4 ], s ) ).toEqual( [ 1, 2, 4 ] );
+	} );
+	it( 'round-trips volume with a default of 1', () => {
+		const s = memoryStorage();
+		expect( loadVolume( s ) ).toBe( 1 );
+		saveVolume( 0.4, s );
+		expect( loadVolume( s ) ).toBe( 0.4 );
 	} );
 	it( 'swallows storage failures', () => {
 		const broken = { getItem() { throw new Error( 'quota' ); }, setItem() { throw new Error( 'quota' ); }, key() { return null; }, removeItem() {}, length: 0 };
@@ -401,6 +420,42 @@ export function saveTrackState( trackId, state, storage = defaultStorage(), now 
 	}
 }
 
+export function loadQueue( trackIds, storage = defaultStorage() ) {
+	try {
+		const raw = storage && storage.getItem( `${ PREFIX }queue:${ trackIds.join( '-' ) }` );
+		const parsed = raw ? JSON.parse( raw ) : null;
+		return Array.isArray( parsed ) ? parsed : [ ...trackIds ];
+	} catch {
+		return [ ...trackIds ];
+	}
+}
+
+export function saveQueue( trackIds, checkedIds, storage = defaultStorage() ) {
+	try {
+		storage.setItem( `${ PREFIX }queue:${ trackIds.join( '-' ) }`, JSON.stringify( checkedIds ) );
+	} catch {
+		// Best-effort.
+	}
+}
+
+export function loadVolume( storage = defaultStorage() ) {
+	try {
+		const raw = storage && storage.getItem( `${ PREFIX }volume` );
+		const parsed = raw === null || raw === undefined ? NaN : Number( raw );
+		return Number.isFinite( parsed ) ? Math.min( Math.max( parsed, 0 ), 1 ) : 1;
+	} catch {
+		return 1;
+	}
+}
+
+export function saveVolume( volume, storage = defaultStorage() ) {
+	try {
+		storage.setItem( `${ PREFIX }volume`, String( volume ) );
+	} catch {
+		// Best-effort.
+	}
+}
+
 function prune( storage, now ) {
 	const stale = [];
 	for ( let i = 0; i < storage.length; i++ ) {
@@ -424,7 +479,7 @@ function prune( storage, now ) {
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `npm run test:unit -- persistence`
-Expected: PASS (5 tests).
+Expected: PASS (8 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -455,10 +510,14 @@ git commit -m "feat(practice-player): localStorage persistence module with unit 
 <div class="jtpp" data-jtpp>
 	<script type="application/json" class="jtpp-data">{"tracks":[…],"options":{…}}</script>
 	<ol class="jtpp-tracklist"><!-- playlist only -->
-		<li><button type="button" class="jtpp-track" data-index="0">
-			<span class="jtpp-track-title">Original Mix (transposed)</span>
-			<span class="jtpp-track-duration">3:32</span>
-		</button></li>
+		<li>
+			<input type="checkbox" class="jtpp-queue-check" data-index="0" checked aria-label="Include in practice rotation" />
+			<button type="button" class="jtpp-track" data-index="0">
+				<span class="jtpp-track-title">Original Mix (transposed)</span>
+				<span class="jtpp-track-duration">3:32</span>
+			</button>
+			<a class="jtpp-download" href="…file url…" download aria-label="Download track">⭳</a>
+		</li>
 	</ol>
 	<div class="jtpp-panel">
 		<div class="jtpp-now-playing"></div>
@@ -473,6 +532,7 @@ git commit -m "feat(practice-player): localStorage persistence module with unit 
 			<button type="button" class="jtpp-next" aria-label="Next track">⏭</button><!-- playlist only -->
 			<button type="button" class="jtpp-loop" aria-label="Toggle section loop" aria-pressed="false">🔁</button>
 			<button type="button" class="jtpp-speed" aria-label="Playback speed">1×</button><!-- if speed -->
+			<input type="range" class="jtpp-volume" min="0" max="1" step="0.05" value="1" aria-label="Volume" /><!-- hidden on narrow viewports via CSS -->
 		</div>
 	</div>
 	<noscript><!-- one <audio controls preload="none"> per track --></noscript>
@@ -518,10 +578,14 @@ function render_player( array $tracks, array $options ): string {
 	<?php if ( $options['playlist'] ) : ?>
 	<ol class="jtpp-tracklist">
 		<?php foreach ( $tracks as $i => $track ) : ?>
-		<li><button type="button" class="jtpp-track" data-index="<?php echo esc_attr( $i ); ?>">
-			<span class="jtpp-track-title"><?php echo esc_html( $track['title'] ); ?></span>
-			<span class="jtpp-track-duration"><?php echo esc_html( $track['duration'] ); ?></span>
-		</button></li>
+		<li>
+			<input type="checkbox" class="jtpp-queue-check" data-index="<?php echo esc_attr( $i ); ?>" checked aria-label="<?php esc_attr_e( 'Include in practice rotation', 'jt-practice-player' ); ?>" />
+			<button type="button" class="jtpp-track" data-index="<?php echo esc_attr( $i ); ?>">
+				<span class="jtpp-track-title"><?php echo esc_html( $track['title'] ); ?></span>
+				<span class="jtpp-track-duration"><?php echo esc_html( $track['duration'] ); ?></span>
+			</button>
+			<a class="jtpp-download" href="<?php echo esc_url( $track['url'] ); ?>" download aria-label="<?php esc_attr_e( 'Download track', 'jt-practice-player' ); ?>">⭳</a>
+		</li>
 		<?php endforeach; ?>
 	</ol>
 	<?php endif; ?>
@@ -538,6 +602,7 @@ function render_player( array $tracks, array $options ): string {
 			<?php if ( $options['playlist'] ) : ?><button type="button" class="jtpp-next" aria-label="<?php esc_attr_e( 'Next track', 'jt-practice-player' ); ?>">⏭</button><?php endif; ?>
 			<button type="button" class="jtpp-loop" aria-label="<?php esc_attr_e( 'Toggle section loop', 'jt-practice-player' ); ?>" aria-pressed="false">🔁</button>
 			<?php if ( $options['speed'] ) : ?><button type="button" class="jtpp-speed" aria-label="<?php esc_attr_e( 'Playback speed', 'jt-practice-player' ); ?>">1×</button><?php endif; ?>
+			<input type="range" class="jtpp-volume" min="0" max="1" step="0.05" value="1" aria-label="<?php esc_attr_e( 'Volume', 'jt-practice-player' ); ?>" />
 		</div>
 	</div>
 	<noscript>
@@ -855,7 +920,7 @@ git commit -m "feat(practice-player): Practice Playlist block with track managem
 - Modify: `src/player/view.js`
 
 **Interfaces:**
-- Consumes: markup contract from Task 4; `loopJumpTarget`, `clampSeek`, `nextSpeed`, `SPEED_STEPS` (Task 2); `loadTrackState`, `saveTrackState` (Task 3); `wavesurfer.js` + `wavesurfer.js/dist/plugins/regions.esm.js`.
+- Consumes: markup contract from Task 4; `loopJumpTarget`, `clampSeek`, `nextSpeed`, `SPEED_STEPS` (Task 2); `loadTrackState`, `saveTrackState`, `loadQueue`, `saveQueue`, `loadVolume`, `saveVolume` (Task 3); `wavesurfer.js` + `wavesurfer.js/dist/plugins/regions.esm.js`.
 - Produces: `export class PracticePlayer { constructor( rootEl: HTMLElement ) }` — reads the `.jtpp-data` JSON payload, mounts into `.jtpp-panel`, wires `.jtpp-tracklist`. Also `rootEl` gains property `jtppPlayer` (instance) for debugging/tests.
 
 **Required behavior (spec §3–4):**
@@ -865,7 +930,9 @@ git commit -m "feat(practice-player): Practice Playlist block with track managem
 3. **Loop enforcement** — on wavesurfer `timeupdate`, `const target = loopJumpTarget( time, loop )`, and if non-null, `ws.setTime( target )`. On `finish` with an armed loop, `ws.setTime( loop.start ); ws.play()`.
 4. Loop button toggles `loop.on` (no region → no-op). Double-click/double-tap on the region (or a region-attached ✕ element) removes it and disarms.
 5. Controls: play/pause (swap icon + `aria-label`, toggle class `is-playing` on `.jtpp-play`; Task 8 styles these hooks — likewise add `is-active` to `.jtpp-loop` when armed and to the active `.jtpp-track` row), −15s/+15s via `clampSeek( ws.getCurrentTime() ± 15, ws.getDuration() )`, speed button cycles down through `SPEED_STEPS` (0.5 wraps to 1×) with label like `0.8×`, applied via `ws.setPlaybackRate( rate, true )` (preserve pitch).
-6. **Playlist**: `.jtpp-track` click loads that index (save state of outgoing track first), `aria-current="true"` + active class on the row, `.jtpp-now-playing` shows the title, prev/next wrap around, auto-play on track switch (not on initial page load). Track end without a loop advances to the next track (stop after the last).
+6. **Playlist**: `.jtpp-track` click loads that index (save state of outgoing track first), `aria-current="true"` + active class on the row, `.jtpp-now-playing` shows the title, prev/next wrap around, auto-play on track switch (not on initial page load). Track end without a loop advances to the next track (stop after the last of the queue).
+6b. **Practice queue**: `.jtpp-queue-check` checkboxes define the rotation (restore via `loadQueue`, persist via `saveQueue` on change). Prev/next and auto-advance traverse ONLY checked indexes, wrapping within the checked set. Clicking an unchecked track's title still plays it (queue governs advancement, not tapping); subsequent advancement resumes from the nearest checked track. All boxes unchecked → prev/next/auto-advance are inert.
+6c. **Volume**: `.jtpp-volume` range input → `ws.setVolume()`; restore via `loadVolume()` on mount, persist via `saveVolume()` on input (debounced with the same mechanism as track state).
 7. **Persistence**: on load, restore `{loopStart, loopEnd, loopOn, position, rate}` (recreate region via `regions.addRegion({ start, end })`, set time/rate). Save debounced ~1s on region/rate/position changes; flush on `pause` and `visibilitychange → hidden`.
 8. **Keyboard** (listener on `rootEl`, only meaningful when focus is inside): `Space` play/pause, `L` loop toggle, `←/→` ∓5s, `Shift+←/→` ∓15s, `↑/↓` speed step. Skip Space/Enter when `event.target` is a button (native activation already handles it). `preventDefault()` on handled keys.
 9. **Multi-player etiquette**: a module-level registry pauses all other `PracticePlayer` instances when one starts playing.
@@ -973,7 +1040,9 @@ git commit -m "feat(practice-player): formatTime helper, usage docs"
   - `.jtpp-tracklist` — no list markers; each `.jtpp-track` a full-width flex row (title left, duration right), comfortable tap height (min 44px), `.is-active`/`[aria-current="true"]` row tinted with `--jtpp-accent`.
   - `.jtpp-waveform` — `touch-action: none` (so drag-select works on touch), min-height 88px, rounded, subtle background.
   - Region styling via wavesurfer's region `part`s (`::part(region)`, `::part(region-handle)`): translucent accent fill, visible grab handles ≥ 12px wide (Planning Center-style brackets).
-  - `.jtpp-controls` — centered flex row, gap, circular buttons ≥ 44px, `.jtpp-play` visually dominant; `.jtpp-loop.is-active` filled with accent; inline SVG icons replacing the placeholder glyphs from Task 4 (update `render_player()` button innerHTML accordingly — play/pause, ±15, prev/next, loop, speed stay text `N×`).
+  - `.jtpp-controls` — centered flex row, gap, circular buttons ≥ 44px, `.jtpp-play` visually dominant; `.jtpp-loop.is-active` filled with accent; inline SVG icons replacing the placeholder glyphs from Task 4 (update `render_player()` button innerHTML accordingly — play/pause, ±15, prev/next, loop, download stay SVG; speed stays text `N×`).
+  - `.jtpp-queue-check` — accent-colored (`accent-color`), ≥ 20px, comfortable hit area; `.jtpp-download` — muted icon link, accent on hover.
+  - `.jtpp-volume` — narrow range input styled to match; `display: none` below 600px (hardware volume rules on phones).
   - Works on light and dark backgrounds using only the custom props + `currentColor` — no hardcoded page-background assumptions.
 - [ ] **Step 2:** Run `npm run build && npm run lint:css` — expect clean.
 - [ ] **Step 3:** Visual check in wp-env on desktop + narrow (390px) viewport.
@@ -999,6 +1068,8 @@ git commit -m "feat(practice-player): player styles with themable custom propert
   - drag creates region; both edges resize; region body drags; loop boundary jump feels immediate
   - loop toggle + `L`; region clear; speed changes persist; ±15s clamps at both ends
   - playlist: tap-to-load, prev/next wrap, auto-advance without loop, active-row highlight
+  - queue: uncheck songs 2+4 of 5 → prev/next/auto-advance only hit 1, 3, 5; tapping an unchecked track still plays it; selection survives reload; all-unchecked is inert
+  - volume slider changes output, persists across reload, hidden on narrow viewport; download icon fetches the file
   - reload restores loop/position/rate per track; two blocks on one page don't fight (starting one pauses the other)
   - keyboard shortcuts only fire with focus inside a player; Space on a focused button doesn't double-toggle
   - editor: add/reorder/remove/rename tracks; missing-file handling (delete an attachment, view post — track skipped, no fatal)

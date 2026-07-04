@@ -21,6 +21,9 @@ A standalone WordPress plugin providing Gutenberg blocks for band-practice audio
   - **±15s skip** buttons; prev/next track buttons in playlist context.
   - **Loop/position persistence** per visitor per track (`localStorage`).
   - **Keyboard shortcuts** (scoped to the focused player).
+  - **Practice queue** (playlist only): a checkbox on each track row selects which tracks are in the rotation ("just give me songs 1, 3, and 5"); prev/next and auto-advance traverse only checked tracks. Inspired by Planning Center's web player.
+  - **Volume slider** (desktop-oriented; phones use hardware volume).
+  - **Per-track download icon** so band members can grab the file offline.
 - **Portability is a hard requirement**: the plugin must be fully self-contained (no dependencies on this repo's themes/plugins), usable on any WordPress site, and ready to extract into its own repository later. All docs (this spec, the implementation plan) live inside the plugin directory so they travel with it.
 
 ## Approach decision
@@ -81,7 +84,7 @@ jt-practice-player/
 
 **Front-end markup (both blocks, from render.php):**
 
-- Playlist: `<div class="jtpp-player" >` containing an ordered track list (`button` per track for a11y) + a player panel: track title, waveform container, time display (current / duration), controls row: prev · −15s · play/pause · +15s · next · loop toggle · speed menu. Prev/next omitted for single-track.
+- Playlist: `<div class="jtpp-player" >` containing an ordered track list (each row: a **queue checkbox**, a `button` with title + duration for a11y, and a **download icon** linking to the file with the `download` attribute) + a player panel: track title, waveform container, time display (current / duration), controls row: prev · −15s · play/pause · +15s · next · loop toggle · speed menu · **volume slider** (a `range` input; hidden on narrow viewports where hardware volume rules). Prev/next omitted for single-track; single-track keeps the download icon next to the title.
 - Deleted/missing attachments are skipped at render; if a playlist ends up empty (or the single-track attachment is gone), render nothing on the front end and an editor-visible notice in the editor.
 
 ## 3. Front-end player behavior
@@ -94,6 +97,8 @@ Built on **wavesurfer.js v7** with the **Regions plugin**.
 - **Speed control**: menu of 0.5 / 0.6 / 0.7 / 0.75 / 0.8 / 0.9 / 1.0×, `preservesPitch` left at browser default (pitch-preserving). Current rate shown on the button (e.g. "0.8×").
 - **Skips**: −15s/+15s buttons (clamped to track bounds).
 - **Playlist behavior**: tapping a track row loads it into the single shared player instance (destroy/re-init wavesurfer media, keep UI mounted), highlights the active row, auto-plays. Prev/next buttons wrap the list. Only one wavesurfer instance per playlist block.
+- **Practice queue**: every row's checkbox starts checked; unchecking removes the track from the rotation. Prev/next and end-of-track auto-advance skip unchecked tracks (wrapping within the checked set). Tapping an unchecked track's title still plays it directly — the queue governs *advancement*, not what you may tap; advancement afterward resumes from the nearest checked track. If every box is unchecked, prev/next/auto-advance are inert (current track just stops at its end). Checkboxes get `aria-label="Include in practice rotation"`.
+- **Volume**: a horizontal `range` slider (0–1, step .05) applied via `ws.setVolume()`; hidden below the small breakpoint.
 - **Keyboard shortcuts** (active when focus is within the player, via `focusin`/`focusout` — never global):
   - `Space` play/pause · `L` toggle loop · `←`/`→` seek ±5s · `Shift+←/→` ±15s · `↑`/`↓` speed up/down one step.
 - **A11y**: all controls are real `<button>`s with `aria-label`s; loop toggle uses `aria-pressed`; track list rows announce active state via `aria-current`; time display is `aria-live="off"` (polled UI, not announced).
@@ -107,6 +112,7 @@ Built on **wavesurfer.js v7** with the **Regions plugin**.
 ```
 
 - Restored when a track loads (region recreated, loop state re-armed, position and rate restored).
+- The practice-queue selection persists per playlist under `jtpp:queue:<joined attachment ids>` → array of checked attachment IDs (the key self-invalidates when the playlist's tracks change). Volume persists globally under `jtpp:volume`.
 - Saved debounced (~1s) on any change and flushed on `pause` and `visibilitychange`/`pagehide`.
 - Storage failures (private mode, quota) are silently ignored — persistence is an enhancement, never load-bearing.
 - Entries older than 90 days are pruned lazily on write.
@@ -134,5 +140,6 @@ Built on **wavesurfer.js v7** with the **Regions plugin**.
 
 - Server-side pre-generated waveform peaks (client decode is fine for practice-length files; revisit if large files feel slow).
 - Multiple named loop regions per track ("verse", "bridge").
+- Per-track key/BPM metadata badges (Planning Center shows key + BPM per song — nice later; `customTitle` covers it manually for now).
 - Loop points shared/saved server-side per user account.
 - External URL sources; Planning Center integration; download button.

@@ -14,6 +14,7 @@
 		"wavesurfer.js": "^7.9.0"
 	},
 	"devDependencies": {
+		"@wordpress/icons": "^15.1.0",
 		"@wordpress/scripts": "^30.0.0"
 	}
 }

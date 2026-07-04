@@ -1,4 +1,5 @@
 import { __ } from '@wordpress/i18n';
+import { useState } from '@wordpress/element';
 import { useSelect } from '@wordpress/data';
 import {
 	useBlockProps,
@@ -15,14 +16,58 @@ import {
 	Flex,
 	FlexItem,
 } from '@wordpress/components';
+import { dragHandle, chevronUp, chevronDown, trash } from '@wordpress/icons';
 
-function TrackRow( { track, index, count, update, move, remove } ) {
+function TrackRow( {
+	track,
+	index,
+	count,
+	update,
+	move,
+	remove,
+	draggingIndex,
+	setDraggingIndex,
+} ) {
 	const attachment = useSelect(
 		( select ) => select( 'core' ).getMedia( track.id ),
 		[ track.id ]
 	);
+	const isDropTarget =
+		draggingIndex !== null && draggingIndex !== index && draggingIndex >= 0;
 	return (
-		<Flex className="jtpp-editor-track" align="flex-end">
+		<Flex
+			className={ `jtpp-editor-track${
+				draggingIndex === index ? ' is-dragging' : ''
+			}${ isDropTarget ? ' is-drop-target' : '' }` }
+			align="flex-end"
+			onDragOver={ ( event ) => {
+				if ( draggingIndex === null || draggingIndex === index ) {
+					return;
+				}
+				event.preventDefault();
+				event.dataTransfer.dropEffect = 'move';
+			} }
+			onDrop={ ( event ) => {
+				event.preventDefault();
+				const from = Number(
+					event.dataTransfer.getData( 'text/plain' )
+				);
+				move( Number.isFinite( from ) ? from : draggingIndex, index );
+				setDraggingIndex( null );
+			} }
+		>
+			<Button
+				className="jtpp-editor-drag-handle"
+				icon={ dragHandle }
+				label={ __( 'Drag to reorder track', 'jt-practice-player' ) }
+				draggable
+				onDragStart={ ( event ) => {
+					setDraggingIndex( index );
+					event.dataTransfer.effectAllowed = 'move';
+					event.dataTransfer.setData( 'text/plain', String( index ) );
+				} }
+				onDragEnd={ () => setDraggingIndex( null ) }
+			/>
 			<FlexItem isBlock>
 				<TextControl
 					label={ __( 'Title', 'jt-practice-player' ) }
@@ -34,19 +79,19 @@ function TrackRow( { track, index, count, update, move, remove } ) {
 				/>
 			</FlexItem>
 			<Button
-				icon="arrow-up-alt2"
+				icon={ chevronUp }
 				label={ __( 'Move up', 'jt-practice-player' ) }
 				disabled={ index === 0 }
 				onClick={ () => move( index, index - 1 ) }
 			/>
 			<Button
-				icon="arrow-down-alt2"
+				icon={ chevronDown }
 				label={ __( 'Move down', 'jt-practice-player' ) }
 				disabled={ index === count - 1 }
 				onClick={ () => move( index, index + 1 ) }
 			/>
 			<Button
-				icon="trash"
+				icon={ trash }
 				label={ __( 'Remove', 'jt-practice-player' ) }
 				isDestructive
 				onClick={ () => remove( index ) }
@@ -57,6 +102,7 @@ function TrackRow( { track, index, count, update, move, remove } ) {
 
 export default function Edit( { attributes, setAttributes } ) {
 	const { tracks, showSkipButtons, showSpeedControl } = attributes;
+	const [ draggingIndex, setDraggingIndex ] = useState( null );
 
 	const addMedia = ( media ) => {
 		const additions = ( Array.isArray( media ) ? media : [ media ] ).map(
@@ -72,6 +118,15 @@ export default function Edit( { attributes, setAttributes } ) {
 			tracks: tracks.map( ( t, n ) => ( n === i ? track : t ) ),
 		} );
 	const move = ( from, to ) => {
+		if (
+			from === to ||
+			from < 0 ||
+			to < 0 ||
+			from >= tracks.length ||
+			to >= tracks.length
+		) {
+			return;
+		}
 		const next = [ ...tracks ];
 		next.splice( to, 0, next.splice( from, 1 )[ 0 ] );
 		setAttributes( { tracks: next } );
@@ -127,6 +182,8 @@ export default function Edit( { attributes, setAttributes } ) {
 							update={ update }
 							move={ move }
 							remove={ remove }
+							draggingIndex={ draggingIndex }
+							setDraggingIndex={ setDraggingIndex }
 						/>
 					) ) }
 					<MediaUploadCheck>

@@ -152,9 +152,19 @@
 }
 
 .jtpp-track-title {
+	display: block;
 	min-width: 0;
 	overflow-wrap: anywhere;
 	font-weight: 560;
+}
+
+.jtpp-track-artist {
+	display: block;
+	margin-top: 3px;
+	color: var(--jtpp-muted);
+	font-size: 0.82em;
+	font-weight: 450;
+	overflow-wrap: anywhere;
 }
 
 .jtpp-track-duration {
@@ -170,10 +180,35 @@
 }
 
 .jtpp-now-playing {
-	font-size: 1.02rem;
-	font-weight: 700;
+	display: flex;
+	align-items: center;
+	gap: 13px;
 	line-height: 1.25;
 	overflow-wrap: anywhere;
+}
+
+.jtpp-artwork {
+	width: 58px;
+	height: 58px;
+	flex: 0 0 58px;
+	border-radius: 7px;
+	object-fit: cover;
+	box-shadow: 0 1px 0 color-mix(in srgb, currentcolor 12%, transparent);
+}
+
+.jtpp-now-copy {
+	min-width: 0;
+}
+
+.jtpp-now-title {
+	font-size: 1.04rem;
+	font-weight: 730;
+}
+
+.jtpp-now-meta {
+	margin-top: 4px;
+	color: var(--jtpp-muted);
+	font-size: 0.92rem;
 }
 
 .jtpp-waveform {

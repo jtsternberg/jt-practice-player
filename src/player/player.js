@@ -45,6 +45,15 @@ function bindGlobalKeyboard() {
 	}
 	keyboardBound = true;
 	document.addEventListener( 'keydown', ( event ) => {
+		const trackButton = event.target?.closest?.( '.jtpp-track' );
+		if ( trackButton && event.key === ' ' ) {
+			activePlayer =
+				trackButton.closest( '[data-jtpp]' )?.jtppPlayer ||
+				activePlayer;
+			event.preventDefault();
+			activePlayer?.togglePlay();
+			return;
+		}
 		if (
 			! activePlayer ||
 			buttonTargetHandlesKey( event.target, event.key )
@@ -132,7 +141,17 @@ export class PracticePlayer {
 				if ( url.host === window.location.host ) {
 					url.protocol = window.location.protocol;
 				}
-				return { ...track, url: url.toString() };
+				const artwork = track.artwork
+					? new URL( track.artwork, window.location.href )
+					: null;
+				if ( artwork && artwork.host === window.location.host ) {
+					artwork.protocol = window.location.protocol;
+				}
+				return {
+					...track,
+					url: url.toString(),
+					artwork: artwork ? artwork.toString() : track.artwork,
+				};
 			} catch {
 				return track;
 			}
@@ -157,6 +176,9 @@ export class PracticePlayer {
 		this.fallbackEl = this.rootEl.querySelector( '.jtpp-fallback' );
 		this.controlsEl = this.rootEl.querySelector( '.jtpp-controls' );
 		this.nowPlayingEl = this.rootEl.querySelector( '.jtpp-now-playing' );
+		this.nowTitleEl = this.rootEl.querySelector( '.jtpp-now-title' );
+		this.nowMetaEl = this.rootEl.querySelector( '.jtpp-now-meta' );
+		this.artworkEl = this.rootEl.querySelector( '.jtpp-artwork' );
 		this.currentTimeEl = this.rootEl.querySelector( '.jtpp-time-current' );
 		this.totalTimeEl = this.rootEl.querySelector( '.jtpp-time-total' );
 		this.playButton = this.rootEl.querySelector( '.jtpp-play' );
@@ -181,6 +203,9 @@ export class PracticePlayer {
 		this.rootEl
 			.querySelector( '.jtpp-next' )
 			?.addEventListener( 'click', () => this.advance( 1, true ) );
+		this.rootEl
+			.querySelector( '.jtpp-start' )
+			?.addEventListener( 'click', () => this.seekStart() );
 
 		this.trackButtons.forEach( ( button ) => {
 			button.addEventListener( 'click', () => {
@@ -623,6 +648,12 @@ export class PracticePlayer {
 		this.scheduleSave();
 	}
 
+	seekStart() {
+		this.waveSurfer?.setTime( 0 );
+		this.updateTimes();
+		this.scheduleSave();
+	}
+
 	advance( direction, autoplay ) {
 		const nextIndex = this.nextQueuedIndex( direction );
 		if ( nextIndex === null ) {
@@ -663,8 +694,25 @@ export class PracticePlayer {
 
 	updateActiveTrack() {
 		const track = this.currentTrack();
-		if ( this.nowPlayingEl ) {
+		if ( this.nowTitleEl ) {
+			this.nowTitleEl.textContent = track.title;
+		} else if ( this.nowPlayingEl ) {
 			this.nowPlayingEl.textContent = track.title;
+		}
+		if ( this.nowMetaEl ) {
+			this.nowMetaEl.textContent = [ track.artist, track.album ]
+				.filter( Boolean )
+				.join( ' · ' );
+			this.nowMetaEl.hidden = ! this.nowMetaEl.textContent;
+		}
+		if ( this.artworkEl ) {
+			if ( track.artwork ) {
+				this.artworkEl.src = track.artwork;
+				this.artworkEl.hidden = false;
+			} else {
+				this.artworkEl.removeAttribute( 'src' );
+				this.artworkEl.hidden = true;
+			}
 		}
 		this.trackButtons.forEach( ( button, index ) => {
 			const active = index === this.activeIndex;
@@ -704,6 +752,7 @@ export class PracticePlayer {
 			L: () => this.toggleLoop(),
 			ArrowLeft: () => this.skip( event.shiftKey ? -15 : -5 ),
 			ArrowRight: () => this.skip( event.shiftKey ? 15 : 5 ),
+			Home: () => this.seekStart(),
 			ArrowUp: () => this.stepSpeed( 1 ),
 			ArrowDown: () => this.stepSpeed( -1 ),
 			MediaPlayPause: () => this.togglePlay(),

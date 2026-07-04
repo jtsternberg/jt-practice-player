@@ -1,5 +1,5 @@
 import { __ } from '@wordpress/i18n';
-import { useState } from '@wordpress/element';
+import { useState, useRef, useEffect } from '@wordpress/element';
 import { useSelect } from '@wordpress/data';
 import {
 	useBlockProps,
@@ -18,14 +18,6 @@ import {
 } from '@wordpress/components';
 import { dragHandle, chevronUp, chevronDown, trash } from '@wordpress/icons';
 
-// Where the dragged row would land, given the row being hovered and the
-// cursor's vertical position within it. Returns the gap index (0..count).
-function dropGap( event, hoverIndex ) {
-	const rect = event.currentTarget.getBoundingClientRect();
-	const below = event.clientY >= rect.top + rect.height / 2;
-	return below ? hoverIndex + 1 : hoverIndex;
-}
-
 function TrackRow( {
 	track,
 	index,
@@ -33,79 +25,39 @@ function TrackRow( {
 	update,
 	move,
 	remove,
-	draggingIndex,
-	setDraggingIndex,
-	dropGapIndex,
-	setDropGapIndex,
-	endDrag,
+	drag,
+	startDrag,
 } ) {
 	const attachment = useSelect(
 		( select ) => select( 'core' ).getMedia( track.id ),
 		[ track.id ]
 	);
-	const dragging = draggingIndex !== null;
-	// A gap indicator is only meaningful when it would actually change order:
-	// not the two gaps flanking the dragged row itself.
+	const title = track.customTitle || attachment?.title?.rendered || '';
+	const isSource = drag && drag.from === index;
+	// The insertion line lives in the gap above (index) or below (index + 1)
+	// this row, suppressed for the two gaps flanking the row being dragged.
 	const showAbove =
-		dragging &&
-		dropGapIndex === index &&
-		draggingIndex !== index &&
-		draggingIndex !== index - 1;
+		drag &&
+		drag.gap === index &&
+		drag.from !== index &&
+		drag.from !== index - 1;
 	const showBelow =
-		dragging &&
-		dropGapIndex === index + 1 &&
-		draggingIndex !== index &&
-		draggingIndex !== index + 1;
+		drag &&
+		drag.gap === index + 1 &&
+		drag.from !== index &&
+		drag.from !== index + 1;
 	return (
 		<Flex
-			className={ `jtpp-editor-track${
-				draggingIndex === index ? ' is-dragging' : ''
-			}${ showAbove ? ' is-drop-above' : '' }${
-				showBelow ? ' is-drop-below' : ''
-			}` }
+			className={ `jtpp-editor-track${ isSource ? ' is-dragging' : '' }${
+				showAbove ? ' is-drop-above' : ''
+			}${ showBelow ? ' is-drop-below' : '' }` }
 			align="flex-end"
-			onDragOver={ ( event ) => {
-				if ( ! dragging ) {
-					return;
-				}
-				event.preventDefault();
-				event.dataTransfer.dropEffect = 'move';
-				setDropGapIndex( dropGap( event, index ) );
-			} }
-			onDrop={ ( event ) => {
-				event.preventDefault();
-				const from = Number(
-					event.dataTransfer.getData( 'text/plain' )
-				);
-				const src = Number.isFinite( from ) ? from : draggingIndex;
-				const gap = dropGap( event, index );
-				// Translate the insertion gap into a destination index in the
-				// post-removal array that move() expects.
-				move( src, src < gap ? gap - 1 : gap );
-				endDrag();
-			} }
 		>
-				<Button
-					className="jtpp-editor-drag-handle"
-					icon={ dragHandle }
-					label={ __( 'Drag to reorder track', 'jt-practice-player' ) }
-					draggable
-					onDragStart={ ( event ) => {
-						const row =
-							event.currentTarget.closest( '.jtpp-editor-track' );
-					if ( row && event.dataTransfer.setDragImage ) {
-						const rect = row.getBoundingClientRect();
-						event.dataTransfer.setDragImage(
-							row,
-							event.clientX - rect.left,
-							event.clientY - rect.top
-						);
-					}
-					setDraggingIndex( index );
-					event.dataTransfer.effectAllowed = 'move';
-					event.dataTransfer.setData( 'text/plain', String( index ) );
-				} }
-				onDragEnd={ endDrag }
+			<Button
+				className="jtpp-editor-drag-handle"
+				icon={ dragHandle }
+				label={ __( 'Drag to reorder track', 'jt-practice-player' ) }
+				onPointerDown={ ( event ) => startDrag( event, index, title ) }
 			/>
 			<FlexItem isBlock>
 				<TextControl
@@ -141,12 +93,12 @@ function TrackRow( {
 
 export default function Edit( { attributes, setAttributes } ) {
 	const { tracks, showSkipButtons, showSpeedControl } = attributes;
-	const [ draggingIndex, setDraggingIndex ] = useState( null );
-	const [ dropGapIndex, setDropGapIndex ] = useState( null );
-	const endDrag = () => {
-		setDraggingIndex( null );
-		setDropGapIndex( null );
-	};
+	const containerRef = useRef( null );
+	// Pointer-based reorder state. Native HTML5 drag/drop is unreliable inside
+	// the block-editor iframe (competing Gutenberg handlers swallow dragover),
+	// so we drive the drag ourselves with pointer capture.
+	// { from, title, x, y, gap } — gap is the insertion index (0..count).
+	const [ drag, setDrag ] = useState( null );
 
 	const addMedia = ( media ) => {
 		const additions = ( Array.isArray( media ) ? media : [ media ] ).map(
@@ -178,8 +130,84 @@ export default function Edit( { attributes, setAttributes } ) {
 	const remove = ( i ) =>
 		setAttributes( { tracks: tracks.filter( ( _, n ) => n !== i ) } );
 
+	// Which gap the pointer currently sits in, by comparing its Y against each
+	// row's midpoint. Scoped to this block's rows only.
+	const gapAt = ( clientY ) => {
+		const rows = containerRef.current
+			? [ ...containerRef.current.querySelectorAll( '.jtpp-editor-track' ) ]
+			: [];
+		for ( let i = 0; i < rows.length; i++ ) {
+			const rect = rows[ i ].getBoundingClientRect();
+			if ( clientY < rect.top + rect.height / 2 ) {
+				return i;
+			}
+		}
+		return rows.length;
+	};
+
+	const startDrag = ( event, index, title ) => {
+		if ( event.button && event.button !== 0 ) {
+			return;
+		}
+		event.preventDefault();
+		setDrag( {
+			from: index,
+			title,
+			x: event.clientX,
+			y: event.clientY,
+			gap: index,
+		} );
+	};
+
+	// While a drag is live, track the pointer on the document (this block's
+	// document — the editor iframe) so movement is followed even once the
+	// cursor leaves the small handle. Commit or cancel on release.
+	const dragging = drag !== null;
+	useEffect( () => {
+		if ( ! dragging ) {
+			return undefined;
+		}
+		const doc = containerRef.current?.ownerDocument || document;
+		const onMove = ( event ) => {
+			setDrag( ( prev ) =>
+				prev
+					? {
+							...prev,
+							x: event.clientX,
+							y: event.clientY,
+							gap: gapAt( event.clientY ),
+					  }
+					: prev
+			);
+		};
+		const onUp = () => {
+			setDrag( ( prev ) => {
+				if ( prev ) {
+					const { from, gap } = prev;
+					// Skip the two gaps that leave the item where it is.
+					if ( gap !== from && gap !== from + 1 ) {
+						move( from, from < gap ? gap - 1 : gap );
+					}
+				}
+				return null;
+			} );
+		};
+		doc.addEventListener( 'pointermove', onMove );
+		doc.addEventListener( 'pointerup', onUp );
+		doc.addEventListener( 'pointercancel', onUp );
+		return () => {
+			doc.removeEventListener( 'pointermove', onMove );
+			doc.removeEventListener( 'pointerup', onUp );
+			doc.removeEventListener( 'pointercancel', onUp );
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [ dragging ] );
+
 	return (
-		<div { ...useBlockProps( { className: 'jtpp-editor' } ) }>
+		<div
+			{ ...useBlockProps( { className: 'jtpp-editor' } ) }
+			ref={ containerRef }
+		>
 			<InspectorControls>
 				<PanelBody
 					title={ __( 'Player options', 'jt-practice-player' ) }
@@ -226,13 +254,19 @@ export default function Edit( { attributes, setAttributes } ) {
 							update={ update }
 							move={ move }
 							remove={ remove }
-							draggingIndex={ draggingIndex }
-							setDraggingIndex={ setDraggingIndex }
-							dropGapIndex={ dropGapIndex }
-							setDropGapIndex={ setDropGapIndex }
-							endDrag={ endDrag }
+							drag={ drag }
+							startDrag={ startDrag }
 						/>
 					) ) }
+					{ drag && (
+						<div
+							className="jtpp-editor-ghost"
+							style={ { top: drag.y, left: drag.x } }
+							aria-hidden="true"
+						>
+							{ drag.title || __( 'Track', 'jt-practice-player' ) }
+						</div>
+					) }
 					<MediaUploadCheck>
 						<MediaUpload
 							allowedTypes={ [ 'audio' ] }

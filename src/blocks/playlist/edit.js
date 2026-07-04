@@ -51,7 +51,7 @@ function TrackRow( {
 			className={ `jtpp-editor-track${ isSource ? ' is-dragging' : '' }${
 				showAbove ? ' is-drop-above' : ''
 			}${ showBelow ? ' is-drop-below' : '' }` }
-			align="flex-end"
+			align="center"
 		>
 			<Button
 				className="jtpp-editor-drag-handle"
@@ -59,9 +59,15 @@ function TrackRow( {
 				label={ __( 'Drag to reorder track', 'jt-practice-player' ) }
 				onPointerDown={ ( event ) => startDrag( event, index, title ) }
 			/>
-			<FlexItem isBlock>
+			<FlexItem isBlock className="jtpp-editor-track__field">
+				<span className="jtpp-editor-track__index" aria-hidden="true">
+					{ index + 1 }
+				</span>
 				<TextControl
-					label={ __( 'Title', 'jt-practice-player' ) }
+					className="jtpp-editor-track__title"
+					label={ __( 'Track title', 'jt-practice-player' ) }
+					hideLabelFromVision
+					__nextHasNoMarginBottom
 					value={ track.customTitle || '' }
 					placeholder={ attachment?.title?.rendered || '...' }
 					onChange={ ( v ) =>
@@ -69,28 +75,31 @@ function TrackRow( {
 					}
 				/>
 			</FlexItem>
-			<div className="jtpp-editor-mover">
+			<div className="jtpp-editor-track__controls">
+				<div className="jtpp-editor-mover">
+					<Button
+						className="jtpp-editor-mover__button"
+						icon={ chevronUp }
+						label={ __( 'Move up', 'jt-practice-player' ) }
+						disabled={ index === 0 }
+						onClick={ () => move( index, index - 1 ) }
+					/>
+					<Button
+						className="jtpp-editor-mover__button"
+						icon={ chevronDown }
+						label={ __( 'Move down', 'jt-practice-player' ) }
+						disabled={ index === count - 1 }
+						onClick={ () => move( index, index + 1 ) }
+					/>
+				</div>
 				<Button
-					className="jtpp-editor-mover__button"
-					icon={ chevronUp }
-					label={ __( 'Move up', 'jt-practice-player' ) }
-					disabled={ index === 0 }
-					onClick={ () => move( index, index - 1 ) }
-				/>
-				<Button
-					className="jtpp-editor-mover__button"
-					icon={ chevronDown }
-					label={ __( 'Move down', 'jt-practice-player' ) }
-					disabled={ index === count - 1 }
-					onClick={ () => move( index, index + 1 ) }
+					className="jtpp-editor-track__remove"
+					icon={ trash }
+					label={ __( 'Remove', 'jt-practice-player' ) }
+					isDestructive
+					onClick={ () => remove( index ) }
 				/>
 			</div>
-			<Button
-				icon={ trash }
-				label={ __( 'Remove', 'jt-practice-player' ) }
-				isDestructive
-				onClick={ () => remove( index ) }
-			/>
 		</Flex>
 	);
 }

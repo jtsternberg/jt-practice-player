@@ -32,11 +32,12 @@ loop button or the L key to turn looping on and off.
 The player includes play/pause, previous/next for playlists, +/-15 second skip
 buttons, playback-speed steps, a desktop volume slider, and per-track downloads.
 Playlist rows include checkboxes for the practice rotation, so you can keep only
-the songs you want in previous/next and automatic advancement.
+the songs you want in previous/next and automatic advancement. Drag playlist
+rows by their handles to put songs in the order you want for that browser.
 
 Keyboard shortcuts work when focus is inside a player: Space toggles playback,
 L toggles the loop, left/right arrows seek five seconds, Shift+left/right seek
 15 seconds, and up/down arrows change speed.
 
-Loop points, playback position, speed, playlist rotation, and volume are saved
-locally in the visitor's browser and restored when they return.
+Loop points, playback position, speed, playlist rotation, playlist order, and
+volume are saved locally in the visitor's browser and restored when they return.

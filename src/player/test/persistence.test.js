@@ -3,6 +3,8 @@ import {
 	saveTrackState,
 	loadQueue,
 	saveQueue,
+	loadOrder,
+	saveOrder,
 	loadVolume,
 	saveVolume,
 } from '../persistence';
@@ -50,6 +52,18 @@ describe( 'persistence', () => {
 		expect( loadTrackState( 1, s ) ).toBeNull();
 		expect( loadTrackState( 2, s ) ).toMatchObject( state );
 	} );
+	it( 'does not prune queue or volume keys while pruning track state', () => {
+		const s = memoryStorage();
+		saveTrackState( 1, state, s, 0 );
+		saveQueue( [ 1, 2, 3 ], [ 1, 3 ], s );
+		saveOrder( [ 1, 2, 3 ], [ 3, 1, 2 ], s );
+		saveVolume( 0.4, s );
+		saveTrackState( 2, state, s, 91 * DAY );
+		expect( loadTrackState( 1, s ) ).toBeNull();
+		expect( loadQueue( [ 1, 2, 3 ], s ) ).toEqual( [ 1, 3 ] );
+		expect( loadOrder( [ 1, 2, 3 ], s ) ).toEqual( [ 3, 1, 2 ] );
+		expect( loadVolume( s ) ).toBe( 0.4 );
+	} );
 	it( 'defaults the queue to all tracks', () => {
 		expect( loadQueue( [ 1, 2, 3 ], memoryStorage() ) ).toEqual( [
 			1, 2, 3,
@@ -61,6 +75,17 @@ describe( 'persistence', () => {
 		expect( loadQueue( [ 1, 2, 3 ], s ) ).toEqual( [ 1, 3 ] );
 		// Different playlist (changed tracks) falls back to all-checked:
 		expect( loadQueue( [ 1, 2, 4 ], s ) ).toEqual( [ 1, 2, 4 ] );
+	} );
+	it( 'round-trips track order, keyed by the track list', () => {
+		const s = memoryStorage();
+		saveOrder( [ 1, 2, 3 ], [ 3, 1, 2 ], s );
+		expect( loadOrder( [ 1, 2, 3 ], s ) ).toEqual( [ 3, 1, 2 ] );
+		expect( loadOrder( [ 1, 2, 4 ], s ) ).toEqual( [ 1, 2, 4 ] );
+	} );
+	it( 'drops unknown ordered IDs and appends missing IDs', () => {
+		const s = memoryStorage();
+		saveOrder( [ 1, 2, 3 ], [ 3, 999, 1 ], s );
+		expect( loadOrder( [ 1, 2, 3 ], s ) ).toEqual( [ 3, 1, 2 ] );
 	} );
 	it( 'round-trips volume with a default of 1', () => {
 		const s = memoryStorage();

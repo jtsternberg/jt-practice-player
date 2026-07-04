@@ -12,11 +12,16 @@ import {
 	saveTrackState,
 	loadQueue,
 	saveQueue,
+	loadOrder,
+	saveOrder,
 	loadVolume,
 	saveVolume,
 } from './persistence';
 
 const PLAYERS = new Set();
+let activePlayer = null;
+let keyboardBound = false;
+let mediaSessionBound = false;
 const SAVE_DELAY = 1000;
 const REGION_COLOR = 'rgba(63, 127, 95, 0.24)';
 const PLAY_ICON =
@@ -28,29 +33,81 @@ function buttonTargetHandlesKey( target, key ) {
 	return target?.closest?.( 'button' ) && ( key === ' ' || key === 'Enter' );
 }
 
+function targetAcceptsText( target ) {
+	return target?.closest?.(
+		'input, textarea, select, [contenteditable=""], [contenteditable="true"]'
+	);
+}
+
+function bindGlobalKeyboard() {
+	if ( keyboardBound ) {
+		return;
+	}
+	keyboardBound = true;
+	document.addEventListener( 'keydown', ( event ) => {
+		if (
+			! activePlayer ||
+			buttonTargetHandlesKey( event.target, event.key )
+		) {
+			return;
+		}
+		if ( targetAcceptsText( event.target ) ) {
+			return;
+		}
+		activePlayer.onKeyDown( event );
+	} );
+	bindMediaSession();
+}
+
+function bindMediaSession() {
+	if ( mediaSessionBound || ! ( 'mediaSession' in window.navigator ) ) {
+		return;
+	}
+	mediaSessionBound = true;
+	const actions = {
+		play: () => activePlayer?.play(),
+		pause: () => activePlayer?.pause(),
+		previoustrack: () => activePlayer?.advance( -1, true ),
+		nexttrack: () => activePlayer?.advance( 1, true ),
+		seekbackward: () => activePlayer?.skip( -15 ),
+		seekforward: () => activePlayer?.skip( 15 ),
+	};
+	Object.entries( actions ).forEach( ( [ action, handler ] ) => {
+		try {
+			window.navigator.mediaSession.setActionHandler( action, handler );
+		} catch {
+			// Unsupported media session actions can be ignored.
+		}
+	} );
+}
+
 export class PracticePlayer {
 	constructor( rootEl ) {
 		this.rootEl = rootEl;
 		this.rootEl.jtppPlayer = this;
 		this.data = this.readData();
-		this.tracks = this.data.tracks || [];
+		this.tracks = this.normalizeTrackUrls( this.data.tracks || [] );
 		this.options = this.data.options || {};
+		this.storageTrackIds = this.tracks.map( ( track ) => track.id );
 		this.activeIndex = 0;
+		this.dragIndex = null;
 		this.loop = null;
 		this.region = null;
 		this.waveSurfer = null;
 		this.regions = null;
 		this.saveTimer = null;
 		this.restoring = false;
-		this.trackIds = this.tracks.map( ( track ) => track.id );
-		this.checkedIds = loadQueue( this.trackIds );
+		this.checkedIds = loadQueue( this.storageTrackIds );
 		this.volume = loadVolume();
 
 		this.cacheElements();
+		this.restoreOrder();
 		this.bindControls();
 		this.restoreQueue();
 		this.loadTrack( 0, false );
 		PLAYERS.add( this );
+		activePlayer = activePlayer || this;
+		bindGlobalKeyboard();
 
 		document.addEventListener(
 			'visibilitychange',
@@ -68,7 +125,28 @@ export class PracticePlayer {
 		}
 	}
 
+	normalizeTrackUrls( tracks ) {
+		return tracks.map( ( track ) => {
+			try {
+				const url = new URL( track.url, window.location.href );
+				if ( url.host === window.location.host ) {
+					url.protocol = window.location.protocol;
+				}
+				return { ...track, url: url.toString() };
+			} catch {
+				return track;
+			}
+		} );
+	}
+
 	cacheElements() {
+		this.trackList = this.rootEl.querySelector( '.jtpp-tracklist' );
+		this.trackRows = Array.from(
+			this.rootEl.querySelectorAll( '.jtpp-track-row' )
+		);
+		this.dragHandles = Array.from(
+			this.rootEl.querySelectorAll( '.jtpp-drag-handle' )
+		);
 		this.trackButtons = Array.from(
 			this.rootEl.querySelectorAll( '.jtpp-track' )
 		);
@@ -110,6 +188,8 @@ export class PracticePlayer {
 			} );
 		} );
 
+		this.bindReordering();
+
 		this.queueChecks.forEach( ( check ) => {
 			check.addEventListener( 'change', () => {
 				this.checkedIds = this.queueChecks
@@ -118,22 +198,143 @@ export class PracticePlayer {
 						( item ) =>
 							this.tracks[ Number( item.dataset.index ) ].id
 					);
-				saveQueue( this.trackIds, this.checkedIds );
+				saveQueue( this.storageTrackIds, this.checkedIds );
 			} );
 		} );
 
 		if ( this.volumeInput ) {
 			this.volumeInput.value = String( this.volume );
 			this.volumeInput.addEventListener( 'input', () => {
-				this.volume = Number( this.volumeInput.value );
-				this.waveSurfer?.setVolume( this.volume );
-				this.scheduleSave();
+				this.setGlobalVolume( Number( this.volumeInput.value ) );
 			} );
 		}
 
-		this.rootEl.addEventListener( 'keydown', ( event ) =>
-			this.onKeyDown( event )
+		this.rootEl.addEventListener( 'pointerdown', () => {
+			activePlayer = this;
+		} );
+		this.rootEl.addEventListener( 'focusin', () => {
+			activePlayer = this;
+		} );
+	}
+
+	bindReordering() {
+		this.dragHandles.forEach( ( handle ) => {
+			handle.addEventListener( 'dragstart', ( event ) => {
+				this.dragIndex = Number( handle.dataset.index );
+				this.trackRows[ this.dragIndex ]?.classList.add(
+					'is-dragging'
+				);
+				event.dataTransfer.effectAllowed = 'move';
+				event.dataTransfer.setData(
+					'text/plain',
+					String( this.dragIndex )
+				);
+			} );
+			handle.addEventListener( 'dragend', () => this.clearDragState() );
+		} );
+
+		this.trackRows.forEach( ( row ) => {
+			row.addEventListener( 'dragover', ( event ) => {
+				if ( this.dragIndex === null ) {
+					return;
+				}
+				event.preventDefault();
+				row.classList.add( 'is-drop-target' );
+				event.dataTransfer.dropEffect = 'move';
+			} );
+			row.addEventListener( 'dragleave', () => {
+				row.classList.remove( 'is-drop-target' );
+			} );
+			row.addEventListener( 'drop', ( event ) => {
+				event.preventDefault();
+				const toIndex = Number( row.dataset.index );
+				this.reorderTracks( this.dragIndex, toIndex );
+				this.clearDragState();
+			} );
+		} );
+	}
+
+	clearDragState() {
+		this.dragIndex = null;
+		this.trackRows.forEach( ( row ) => {
+			row.classList.remove( 'is-dragging', 'is-drop-target' );
+		} );
+	}
+
+	restoreOrder() {
+		if ( ! this.trackList || this.tracks.length < 2 ) {
+			return;
+		}
+		const orderIds = loadOrder( this.storageTrackIds );
+		const byId = new Map(
+			this.tracks.map( ( track ) => [ track.id, track ] )
 		);
+		const rowById = new Map(
+			this.tracks.map( ( track, index ) => [
+				track.id,
+				this.trackRows[ index ],
+			] )
+		);
+		this.tracks = orderIds
+			.map( ( id ) => byId.get( id ) )
+			.filter( Boolean );
+		this.trackRows = orderIds
+			.map( ( id ) => rowById.get( id ) )
+			.filter( Boolean );
+		this.trackRows.forEach( ( row ) => this.trackList.appendChild( row ) );
+		this.refreshTrackElements();
+	}
+
+	reorderTracks( from, to ) {
+		if (
+			from === null ||
+			from === to ||
+			from < 0 ||
+			to < 0 ||
+			from >= this.tracks.length ||
+			to >= this.tracks.length
+		) {
+			return;
+		}
+		const activeTrackId = this.currentTrack()?.id;
+		this.tracks.splice( to, 0, this.tracks.splice( from, 1 )[ 0 ] );
+		this.trackRows.splice( to, 0, this.trackRows.splice( from, 1 )[ 0 ] );
+		this.trackRows.forEach( ( row ) => this.trackList.appendChild( row ) );
+		this.activeIndex = this.tracks.findIndex(
+			( track ) => track.id === activeTrackId
+		);
+		saveOrder(
+			this.storageTrackIds,
+			this.tracks.map( ( track ) => track.id )
+		);
+		this.refreshTrackElements();
+		this.restoreQueue();
+		this.updateActiveTrack();
+	}
+
+	refreshTrackElements() {
+		this.trackRows = Array.from(
+			this.rootEl.querySelectorAll( '.jtpp-track-row' )
+		);
+		this.dragHandles = Array.from(
+			this.rootEl.querySelectorAll( '.jtpp-drag-handle' )
+		);
+		this.trackButtons = Array.from(
+			this.rootEl.querySelectorAll( '.jtpp-track' )
+		);
+		this.queueChecks = Array.from(
+			this.rootEl.querySelectorAll( '.jtpp-queue-check' )
+		);
+		this.trackRows.forEach( ( row, index ) => {
+			row.dataset.index = String( index );
+			row.querySelectorAll( '[data-index]' ).forEach( ( el ) => {
+				el.dataset.index = String( index );
+			} );
+			const download = row.querySelector( '.jtpp-download' );
+			if ( download && this.tracks[ index ]?.url ) {
+				download.href = this.tracks[ index ].url;
+			}
+		} );
 	}
 
 	restoreQueue() {
@@ -315,6 +516,7 @@ export class PracticePlayer {
 	}
 
 	onPlay() {
+		activePlayer = this;
 		PLAYERS.forEach( ( player ) => {
 			if ( player !== this ) {
 				player.pause();
@@ -391,6 +593,19 @@ export class PracticePlayer {
 		this.waveSurfer?.setPlaybackRate( rate, true );
 		if ( this.speedButton ) {
 			this.speedButton.textContent = `${ rate }\u00d7`;
+		}
+	}
+
+	setGlobalVolume( volume ) {
+		PLAYERS.forEach( ( player ) => player.setVolume( volume ) );
+		saveVolume( volume );
+	}
+
+	setVolume( volume ) {
+		this.volume = Math.min( Math.max( volume, 0 ), 1 );
+		this.waveSurfer?.setVolume( this.volume );
+		if ( this.volumeInput ) {
+			this.volumeInput.value = String( this.volume );
 		}
 	}
 
@@ -491,6 +706,11 @@ export class PracticePlayer {
 			ArrowRight: () => this.skip( event.shiftKey ? 15 : 5 ),
 			ArrowUp: () => this.stepSpeed( 1 ),
 			ArrowDown: () => this.stepSpeed( -1 ),
+			MediaPlayPause: () => this.togglePlay(),
+			MediaPlay: () => this.play(),
+			MediaPause: () => this.pause(),
+			MediaTrackPrevious: () => this.advance( -1, true ),
+			MediaTrackNext: () => this.advance( 1, true ),
 		};
 		const handler = handlers[ event.key ];
 		if ( handler ) {

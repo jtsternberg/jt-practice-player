@@ -39,6 +39,7 @@ function resolve_tracks( array $refs ): array {
 		if ( ! $url ) {
 			continue;
 		}
+		$url      = set_url_scheme( $url );
 		$meta     = wp_get_attachment_metadata( $id );
 		$tracks[] = array(
 			'id'       => $id,
@@ -65,7 +66,8 @@ function render_player( array $tracks, array $options ): string {
 	<?php if ( $options['playlist'] ) : ?>
 	<ol class="jtpp-tracklist">
 		<?php foreach ( $tracks as $i => $track ) : ?>
-		<li>
+		<li class="jtpp-track-row" data-index="<?php echo esc_attr( $i ); ?>">
+			<button type="button" class="jtpp-drag-handle" draggable="true" data-index="<?php echo esc_attr( $i ); ?>" aria-label="<?php esc_attr_e( 'Reorder track', 'jt-practice-player' ); ?>"><?php echo icon( 'grip' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button>
 			<input type="checkbox" class="jtpp-queue-check" data-index="<?php echo esc_attr( $i ); ?>" checked aria-label="<?php esc_attr_e( 'Include in practice rotation', 'jt-practice-player' ); ?>" />
 			<button type="button" class="jtpp-track" data-index="<?php echo esc_attr( $i ); ?>">
 				<span class="jtpp-track-title"><?php echo esc_html( $track['title'] ); ?></span>
@@ -121,6 +123,8 @@ function icon( string $name ): string {
 			return '<svg' . $attrs . '><path d="M17 2l4 4-4 4"></path><path d="M3 11V9a3 3 0 0 1 3-3h15"></path><path d="M7 22l-4-4 4-4"></path><path d="M21 13v2a3 3 0 0 1-3 3H3"></path></svg>';
 		case 'download':
 			return '<svg' . $attrs . '><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>';
+		case 'grip':
+			return '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="9" cy="5" r="1.5"></circle><circle cx="15" cy="5" r="1.5"></circle><circle cx="9" cy="12" r="1.5"></circle><circle cx="15" cy="12" r="1.5"></circle><circle cx="9" cy="19" r="1.5"></circle><circle cx="15" cy="19" r="1.5"></circle></svg>';
 	}
 	return '';
 }

@@ -62,6 +62,35 @@ export function saveQueue( trackIds, checkedIds, storage = defaultStorage() ) {
 	}
 }
 
+export function loadOrder( trackIds, storage = defaultStorage() ) {
+	try {
+		const raw =
+			storage &&
+			storage.getItem( `${ PREFIX }order:${ trackIds.join( '-' ) }` );
+		const parsed = raw ? JSON.parse( raw ) : null;
+		if ( ! Array.isArray( parsed ) ) {
+			return [ ...trackIds ];
+		}
+		const known = new Set( trackIds );
+		const ordered = parsed.filter( ( id ) => known.has( id ) );
+		const missing = trackIds.filter( ( id ) => ! ordered.includes( id ) );
+		return [ ...ordered, ...missing ];
+	} catch {
+		return [ ...trackIds ];
+	}
+}
+
+export function saveOrder( trackIds, orderedIds, storage = defaultStorage() ) {
+	try {
+		storage.setItem(
+			`${ PREFIX }order:${ trackIds.join( '-' ) }`,
+			JSON.stringify( orderedIds )
+		);
+	} catch {
+		// Best-effort.
+	}
+}
+
 export function loadVolume( storage = defaultStorage() ) {
 	try {
 		const raw = storage && storage.getItem( `${ PREFIX }volume` );
@@ -86,7 +115,7 @@ function prune( storage, now ) {
 	const stale = [];
 	for ( let i = 0; i < storage.length; i++ ) {
 		const key = storage.key( i );
-		if ( ! key || ! key.startsWith( PREFIX ) ) {
+		if ( ! key || ! /^jtpp:\d+$/.test( key ) ) {
 			continue;
 		}
 		try {

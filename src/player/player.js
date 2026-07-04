@@ -5,6 +5,7 @@ import {
 	clampSeek,
 	nextSpeed,
 	SPEED_STEPS,
+	formatTime,
 } from './loop-engine';
 import {
 	loadTrackState,
@@ -18,15 +19,6 @@ import {
 const PLAYERS = new Set();
 const SAVE_DELAY = 1000;
 const REGION_COLOR = 'rgba(63, 127, 95, 0.24)';
-
-function formatTime( seconds ) {
-	if ( ! Number.isFinite( seconds ) || seconds < 0 ) {
-		return '0:00';
-	}
-	const minutes = Math.floor( seconds / 60 );
-	const remainder = String( Math.floor( seconds % 60 ) ).padStart( 2, '0' );
-	return `${ minutes }:${ remainder }`;
-}
 
 function buttonTargetHandlesKey( target, key ) {
 	return target?.closest?.( 'button' ) && ( key === ' ' || key === 'Enter' );

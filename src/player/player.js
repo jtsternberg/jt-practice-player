@@ -19,6 +19,10 @@ import {
 const PLAYERS = new Set();
 const SAVE_DELAY = 1000;
 const REGION_COLOR = 'rgba(63, 127, 95, 0.24)';
+const PLAY_ICON =
+	'<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="7 5 19 12 7 19 7 5"></polygon></svg>';
+const PAUSE_ICON =
+	'<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5v14"></path><path d="M16 5v14"></path></svg>';
 
 function buttonTargetHandlesKey( target, key ) {
 	return target?.closest?.( 'button' ) && ( key === ' ' || key === 'Enter' );
@@ -319,7 +323,7 @@ export class PracticePlayer {
 		this.playButton?.classList.add( 'is-playing' );
 		this.playButton?.setAttribute( 'aria-label', 'Pause' );
 		if ( this.playButton ) {
-			this.playButton.textContent = 'Pause';
+			this.playButton.innerHTML = PAUSE_ICON;
 		}
 	}
 
@@ -328,7 +332,7 @@ export class PracticePlayer {
 		this.playButton?.classList.remove( 'is-playing' );
 		this.playButton?.setAttribute( 'aria-label', 'Play' );
 		if ( this.playButton ) {
-			this.playButton.textContent = 'Play';
+			this.playButton.innerHTML = PLAY_ICON;
 		}
 	}
 
@@ -386,7 +390,7 @@ export class PracticePlayer {
 	applyRate( rate ) {
 		this.waveSurfer?.setPlaybackRate( rate, true );
 		if ( this.speedButton ) {
-			this.speedButton.textContent = `${ rate }x`;
+			this.speedButton.textContent = `${ rate }\u00d7`;
 		}
 	}
 

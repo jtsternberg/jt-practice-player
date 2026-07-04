@@ -71,7 +71,7 @@ function render_player( array $tracks, array $options ): string {
 				<span class="jtpp-track-title"><?php echo esc_html( $track['title'] ); ?></span>
 				<span class="jtpp-track-duration"><?php echo esc_html( $track['duration'] ); ?></span>
 			</button>
-			<a class="jtpp-download" href="<?php echo esc_url( $track['url'] ); ?>" download aria-label="<?php esc_attr_e( 'Download track', 'jt-practice-player' ); ?>">&#x2B73;</a>
+			<a class="jtpp-download" href="<?php echo esc_url( $track['url'] ); ?>" download aria-label="<?php esc_attr_e( 'Download track', 'jt-practice-player' ); ?>"><?php echo icon( 'download' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></a>
 		</li>
 		<?php endforeach; ?>
 	</ol>
@@ -82,12 +82,12 @@ function render_player( array $tracks, array $options ): string {
 		<div class="jtpp-fallback" hidden></div>
 		<div class="jtpp-times"><span class="jtpp-time-current">0:00</span><span class="jtpp-time-total">0:00</span></div>
 		<div class="jtpp-controls">
-			<?php if ( $options['playlist'] ) : ?><button type="button" class="jtpp-prev" aria-label="<?php esc_attr_e( 'Previous track', 'jt-practice-player' ); ?>">&#x23EE;</button><?php endif; ?>
-			<?php if ( $options['skip'] ) : ?><button type="button" class="jtpp-back15" aria-label="<?php esc_attr_e( 'Back 15 seconds', 'jt-practice-player' ); ?>">&#x21BA;15</button><?php endif; ?>
-			<button type="button" class="jtpp-play" aria-label="<?php esc_attr_e( 'Play', 'jt-practice-player' ); ?>">&#x25B6;</button>
-			<?php if ( $options['skip'] ) : ?><button type="button" class="jtpp-fwd15" aria-label="<?php esc_attr_e( 'Forward 15 seconds', 'jt-practice-player' ); ?>">&#x21BB;15</button><?php endif; ?>
-			<?php if ( $options['playlist'] ) : ?><button type="button" class="jtpp-next" aria-label="<?php esc_attr_e( 'Next track', 'jt-practice-player' ); ?>">&#x23ED;</button><?php endif; ?>
-			<button type="button" class="jtpp-loop" aria-label="<?php esc_attr_e( 'Toggle section loop', 'jt-practice-player' ); ?>" aria-pressed="false">&#x1F501;</button>
+			<?php if ( $options['playlist'] ) : ?><button type="button" class="jtpp-prev" aria-label="<?php esc_attr_e( 'Previous track', 'jt-practice-player' ); ?>"><?php echo icon( 'prev' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button><?php endif; ?>
+			<?php if ( $options['skip'] ) : ?><button type="button" class="jtpp-back15" aria-label="<?php esc_attr_e( 'Back 15 seconds', 'jt-practice-player' ); ?>"><?php echo icon( 'back15' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button><?php endif; ?>
+			<button type="button" class="jtpp-play" aria-label="<?php esc_attr_e( 'Play', 'jt-practice-player' ); ?>"><?php echo icon( 'play' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button>
+			<?php if ( $options['skip'] ) : ?><button type="button" class="jtpp-fwd15" aria-label="<?php esc_attr_e( 'Forward 15 seconds', 'jt-practice-player' ); ?>"><?php echo icon( 'fwd15' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button><?php endif; ?>
+			<?php if ( $options['playlist'] ) : ?><button type="button" class="jtpp-next" aria-label="<?php esc_attr_e( 'Next track', 'jt-practice-player' ); ?>"><?php echo icon( 'next' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button><?php endif; ?>
+			<button type="button" class="jtpp-loop" aria-label="<?php esc_attr_e( 'Toggle section loop', 'jt-practice-player' ); ?>" aria-pressed="false"><?php echo icon( 'loop' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button>
 			<?php if ( $options['speed'] ) : ?><button type="button" class="jtpp-speed" aria-label="<?php esc_attr_e( 'Playback speed', 'jt-practice-player' ); ?>">1&times;</button><?php endif; ?>
 			<input type="range" class="jtpp-volume" min="0" max="1" step="0.05" value="1" aria-label="<?php esc_attr_e( 'Volume', 'jt-practice-player' ); ?>" />
 		</div>
@@ -100,4 +100,27 @@ function render_player( array $tracks, array $options ): string {
 	</noscript>
 	<?php
 	return ob_get_clean();
+}
+
+function icon( string $name ): string {
+	$attrs = ' aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
+	switch ( $name ) {
+		case 'play':
+			return '<svg' . $attrs . '><polygon points="7 5 19 12 7 19 7 5"></polygon></svg>';
+		case 'pause':
+			return '<svg' . $attrs . '><path d="M8 5v14"></path><path d="M16 5v14"></path></svg>';
+		case 'prev':
+			return '<svg' . $attrs . '><path d="M6 5v14"></path><polygon points="19 5 8 12 19 19 19 5"></polygon></svg>';
+		case 'next':
+			return '<svg' . $attrs . '><path d="M18 5v14"></path><polygon points="5 5 16 12 5 19 5 5"></polygon></svg>';
+		case 'back15':
+			return '<svg' . $attrs . '><path d="M9 9H4V4"></path><path d="M4 9a8 8 0 1 1 2.3 5.7"></path><text x="9" y="15" font-size="7" stroke-width="0" fill="currentColor">15</text></svg>';
+		case 'fwd15':
+			return '<svg' . $attrs . '><path d="M15 9h5V4"></path><path d="M20 9a8 8 0 1 0-2.3 5.7"></path><text x="8" y="15" font-size="7" stroke-width="0" fill="currentColor">15</text></svg>';
+		case 'loop':
+			return '<svg' . $attrs . '><path d="M17 2l4 4-4 4"></path><path d="M3 11V9a3 3 0 0 1 3-3h15"></path><path d="M7 22l-4-4 4-4"></path><path d="M21 13v2a3 3 0 0 1-3 3H3"></path></svg>';
+		case 'download':
+			return '<svg' . $attrs . '><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>';
+	}
+	return '';
 }

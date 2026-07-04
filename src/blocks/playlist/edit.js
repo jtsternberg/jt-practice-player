@@ -69,18 +69,22 @@ function TrackRow( {
 					}
 				/>
 			</FlexItem>
-			<Button
-				icon={ chevronUp }
-				label={ __( 'Move up', 'jt-practice-player' ) }
-				disabled={ index === 0 }
-				onClick={ () => move( index, index - 1 ) }
-			/>
-			<Button
-				icon={ chevronDown }
-				label={ __( 'Move down', 'jt-practice-player' ) }
-				disabled={ index === count - 1 }
-				onClick={ () => move( index, index + 1 ) }
-			/>
+			<div className="jtpp-editor-mover">
+				<Button
+					className="jtpp-editor-mover__button"
+					icon={ chevronUp }
+					label={ __( 'Move up', 'jt-practice-player' ) }
+					disabled={ index === 0 }
+					onClick={ () => move( index, index - 1 ) }
+				/>
+				<Button
+					className="jtpp-editor-mover__button"
+					icon={ chevronDown }
+					label={ __( 'Move down', 'jt-practice-player' ) }
+					disabled={ index === count - 1 }
+					onClick={ () => move( index, index + 1 ) }
+				/>
+			</div>
 			<Button
 				icon={ trash }
 				label={ __( 'Remove', 'jt-practice-player' ) }

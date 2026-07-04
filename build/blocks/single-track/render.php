@@ -1,0 +1,17 @@
+<?php
+namespace JTPP;
+
+$jtpp_tracks = resolve_tracks( array( array( 'id' => $attributes['id'] ?? 0, 'customTitle' => $attributes['customTitle'] ?? '' ) ) );
+$jtpp_inner  = render_player(
+	$jtpp_tracks,
+	array(
+		'playlist' => false,
+		'skip'     => ! empty( $attributes['showSkipButtons'] ),
+		'speed'    => ! empty( $attributes['showSpeedControl'] ),
+	)
+);
+
+if ( ! $jtpp_inner ) {
+	return;
+}
+printf( '<div %s data-jtpp>%s</div>', get_block_wrapper_attributes( array( 'class' => 'jtpp' ) ), $jtpp_inner ); // phpcs:ignore WordPress.Security.EscapeOutput

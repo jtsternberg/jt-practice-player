@@ -1,4 +1,11 @@
-import { loadTrackState, saveTrackState, loadQueue, saveQueue, loadVolume, saveVolume } from '../persistence';
+import {
+	loadTrackState,
+	saveTrackState,
+	loadQueue,
+	saveQueue,
+	loadVolume,
+	saveVolume,
+} from '../persistence';
 
 function memoryStorage() {
 	const map = new Map();
@@ -14,7 +21,13 @@ function memoryStorage() {
 }
 
 const DAY = 86400000;
-const state = { loopStart: 62.1, loopEnd: 94.3, loopOn: true, position: 63, rate: 0.8 };
+const state = {
+	loopStart: 62.1,
+	loopEnd: 94.3,
+	loopOn: true,
+	position: 63,
+	rate: 0.8,
+};
 
 describe( 'persistence', () => {
 	it( 'round-trips track state', () => {
@@ -38,7 +51,9 @@ describe( 'persistence', () => {
 		expect( loadTrackState( 2, s ) ).toMatchObject( state );
 	} );
 	it( 'defaults the queue to all tracks', () => {
-		expect( loadQueue( [ 1, 2, 3 ], memoryStorage() ) ).toEqual( [ 1, 2, 3 ] );
+		expect( loadQueue( [ 1, 2, 3 ], memoryStorage() ) ).toEqual( [
+			1, 2, 3,
+		] );
 	} );
 	it( 'round-trips the queue, keyed by the track list', () => {
 		const s = memoryStorage();
@@ -54,7 +69,19 @@ describe( 'persistence', () => {
 		expect( loadVolume( s ) ).toBe( 0.4 );
 	} );
 	it( 'swallows storage failures', () => {
-		const broken = { getItem() { throw new Error( 'quota' ); }, setItem() { throw new Error( 'quota' ); }, key() { return null; }, removeItem() {}, length: 0 };
+		const broken = {
+			getItem() {
+				throw new Error( 'quota' );
+			},
+			setItem() {
+				throw new Error( 'quota' );
+			},
+			key() {
+				return null;
+			},
+			removeItem() {},
+			length: 0,
+		};
 		expect( () => saveTrackState( 1, state, broken, 0 ) ).not.toThrow();
 		expect( loadTrackState( 1, broken ) ).toBeNull();
 	} );

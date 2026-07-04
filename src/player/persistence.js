@@ -22,9 +22,17 @@ export function loadTrackState( trackId, storage = defaultStorage() ) {
 	}
 }
 
-export function saveTrackState( trackId, state, storage = defaultStorage(), now = Date.now() ) {
+export function saveTrackState(
+	trackId,
+	state,
+	storage = defaultStorage(),
+	now = Date.now()
+) {
 	try {
-		storage.setItem( PREFIX + trackId, JSON.stringify( { ...state, updatedAt: now } ) );
+		storage.setItem(
+			PREFIX + trackId,
+			JSON.stringify( { ...state, updatedAt: now } )
+		);
 		prune( storage, now );
 	} catch {
 		// Persistence is best-effort.
@@ -33,7 +41,9 @@ export function saveTrackState( trackId, state, storage = defaultStorage(), now 
 
 export function loadQueue( trackIds, storage = defaultStorage() ) {
 	try {
-		const raw = storage && storage.getItem( `${ PREFIX }queue:${ trackIds.join( '-' ) }` );
+		const raw =
+			storage &&
+			storage.getItem( `${ PREFIX }queue:${ trackIds.join( '-' ) }` );
 		const parsed = raw ? JSON.parse( raw ) : null;
 		return Array.isArray( parsed ) ? parsed : [ ...trackIds ];
 	} catch {
@@ -43,7 +53,10 @@ export function loadQueue( trackIds, storage = defaultStorage() ) {
 
 export function saveQueue( trackIds, checkedIds, storage = defaultStorage() ) {
 	try {
-		storage.setItem( `${ PREFIX }queue:${ trackIds.join( '-' ) }`, JSON.stringify( checkedIds ) );
+		storage.setItem(
+			`${ PREFIX }queue:${ trackIds.join( '-' ) }`,
+			JSON.stringify( checkedIds )
+		);
 	} catch {
 		// Best-effort.
 	}
@@ -53,7 +66,9 @@ export function loadVolume( storage = defaultStorage() ) {
 	try {
 		const raw = storage && storage.getItem( `${ PREFIX }volume` );
 		const parsed = raw === null || raw === undefined ? NaN : Number( raw );
-		return Number.isFinite( parsed ) ? Math.min( Math.max( parsed, 0 ), 1 ) : 1;
+		return Number.isFinite( parsed )
+			? Math.min( Math.max( parsed, 0 ), 1 )
+			: 1;
 	} catch {
 		return 1;
 	}
@@ -75,7 +90,8 @@ function prune( storage, now ) {
 			continue;
 		}
 		try {
-			const { updatedAt = 0 } = JSON.parse( storage.getItem( key ) ) || {};
+			const { updatedAt = 0 } =
+				JSON.parse( storage.getItem( key ) ) || {};
 			if ( now - updatedAt > MAX_AGE_MS ) {
 				stale.push( key );
 			}

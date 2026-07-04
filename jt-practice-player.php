@@ -56,6 +56,22 @@ function resolve_tracks( array $refs ): array {
 	return $tracks;
 }
 
+function player_style_from_attributes( array $attributes ): string {
+	$colors = array(
+		'accentColor'   => '--jtpp-accent',
+		'loopColor'     => '--jtpp-loop',
+		'playheadColor' => '--jtpp-playhead',
+	);
+	$styles = array();
+	foreach ( $colors as $attribute => $property ) {
+		$color = sanitize_hex_color( $attributes[ $attribute ] ?? '' );
+		if ( $color ) {
+			$styles[] = $property . ':' . $color;
+		}
+	}
+	return implode( ';', $styles );
+}
+
 function render_player( array $tracks, array $options ): string {
 	if ( ! $tracks ) {
 		return '';
@@ -116,6 +132,7 @@ function render_player( array $tracks, array $options ): string {
 			<?php if ( $options['skip'] ) : ?><button type="button" class="jtpp-fwd15" aria-label="<?php esc_attr_e( 'Forward 15 seconds', 'jt-practice-player' ); ?>"><?php echo icon( 'fwd15' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button><?php endif; ?>
 			<?php if ( $options['playlist'] ) : ?><button type="button" class="jtpp-next" aria-label="<?php esc_attr_e( 'Next track', 'jt-practice-player' ); ?>"><?php echo icon( 'next' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button><?php endif; ?>
 			<button type="button" class="jtpp-loop" aria-label="<?php esc_attr_e( 'Toggle section loop', 'jt-practice-player' ); ?>" aria-pressed="false"><?php echo icon( 'loop' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button>
+			<?php if ( ! empty( $options['fullscreen'] ) ) : ?><button type="button" class="jtpp-fullscreen" aria-label="<?php esc_attr_e( 'Enter fullscreen', 'jt-practice-player' ); ?>" aria-pressed="false"><?php echo icon( 'fullscreen' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button><?php endif; ?>
 			<?php if ( $options['speed'] ) : ?>
 			<select class="jtpp-speed" aria-label="<?php esc_attr_e( 'Playback speed', 'jt-practice-player' ); ?>">
 				<?php foreach ( array( '0.5', '0.6', '0.7', '0.75', '0.8', '0.9', '1', '1.1', '1.2', '1.25', '1.5', '1.75', '2' ) as $rate ) : ?>
@@ -160,6 +177,8 @@ function icon( string $name ): string {
 			return '<svg' . $attrs . '><path d="M17 2l4 4-4 4"></path><path d="M3 11V9a3 3 0 0 1 3-3h15"></path><path d="M7 22l-4-4 4-4"></path><path d="M21 13v2a3 3 0 0 1-3 3H3"></path></svg>';
 		case 'download':
 			return '<svg' . $attrs . '><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>';
+		case 'fullscreen':
+			return '<svg' . $attrs . '><path d="M8 3H3v5"></path><path d="M16 3h5v5"></path><path d="M21 16v5h-5"></path><path d="M3 16v5h5"></path></svg>';
 		case 'grip':
 			return '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="9" cy="5" r="1.5"></circle><circle cx="15" cy="5" r="1.5"></circle><circle cx="9" cy="12" r="1.5"></circle><circle cx="15" cy="12" r="1.5"></circle><circle cx="9" cy="19" r="1.5"></circle><circle cx="15" cy="19" r="1.5"></circle></svg>';
 	}

@@ -10,7 +10,11 @@
 	"attributes": {
 		"tracks": { "type": "array", "default": [] },
 		"showSkipButtons": { "type": "boolean", "default": true },
-		"showSpeedControl": { "type": "boolean", "default": true }
+		"showSpeedControl": { "type": "boolean", "default": true },
+		"showFullscreenControl": { "type": "boolean", "default": true },
+		"accentColor": { "type": "string", "default": "" },
+		"loopColor": { "type": "string", "default": "" },
+		"playheadColor": { "type": "string", "default": "" }
 	},
 	"supports": { "html": false, "align": [ "wide" ] },
 	"editorScript": "file:./index.js",

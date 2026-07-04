@@ -22,7 +22,17 @@
 	box-sizing: border-box;
 }
 
+.jtpp:fullscreen {
+	width: 100vw;
+	height: 100vh;
+	padding: 24px;
+	overflow: auto;
+	background: Canvas;
+	color: CanvasText;
+}
+
 .jtpp-shell {
+	position: relative;
 	display: grid;
 	gap: 0;
 	padding: 12px 14px 14px;
@@ -30,6 +40,16 @@
 	border-radius: 8px;
 	background: linear-gradient(180deg, color-mix(in srgb, currentcolor 3%, transparent), transparent 54px);
 	box-shadow: 0 1px 0 color-mix(in srgb, currentcolor 5%, transparent);
+}
+
+.jtpp:fullscreen .jtpp-shell,
+.jtpp.is-fullscreen .jtpp-shell {
+	width: min(100%, 1100px);
+	min-height: calc(100vh - 48px);
+	margin: 0 auto;
+	background:
+		linear-gradient(180deg, color-mix(in srgb, currentcolor 3%, transparent), transparent 54px),
+		Canvas;
 }
 
 .jtpp-tracklist {
@@ -244,6 +264,38 @@
 	border-radius: 0;
 	background: transparent;
 	box-shadow: none;
+}
+
+.jtpp-shell.has-sticky-player.is-player-stuck {
+	padding-bottom: calc(var(--jtpp-sticky-height, 0px) + 28px);
+}
+
+.jtpp-shell.is-player-stuck .jtpp-panel {
+	position: fixed;
+	z-index: 50;
+	left: var(--jtpp-sticky-left, 0);
+	bottom: max(0px, env(safe-area-inset-bottom));
+	width: var(--jtpp-sticky-width, 100%);
+	padding: 12px 14px 14px;
+	border: 1px solid var(--jtpp-hairline);
+	border-bottom: 0;
+	border-radius: 0;
+	overflow: visible;
+	background:
+		linear-gradient(180deg, color-mix(in srgb, currentcolor 4%, transparent), transparent 42px),
+		color-mix(in srgb, Canvas 96%, currentcolor 4%);
+	box-shadow: 0 -1px 0 color-mix(in srgb, currentcolor 7%, transparent);
+}
+
+.jtpp-shell.is-player-stuck .jtpp-panel::before {
+	position: absolute;
+	right: 0;
+	bottom: 100%;
+	left: 0;
+	height: 22px;
+	background: linear-gradient(180deg, transparent, color-mix(in srgb, #000 13%, transparent));
+	content: "";
+	pointer-events: none;
 }
 
 .jtpp-now-playing {

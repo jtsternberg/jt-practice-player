@@ -4,6 +4,7 @@ import {
 	useBlockProps,
 	MediaPlaceholder,
 	InspectorControls,
+	PanelColorSettings,
 } from '@wordpress/block-editor';
 import {
 	PanelBody,
@@ -13,7 +14,16 @@ import {
 } from '@wordpress/components';
 
 export default function Edit( { attributes, setAttributes } ) {
-	const { id, customTitle, showSkipButtons, showSpeedControl } = attributes;
+	const {
+		id,
+		customTitle,
+		showSkipButtons,
+		showSpeedControl,
+		showFullscreenControl,
+		accentColor,
+		loopColor,
+		playheadColor,
+	} = attributes;
 	const attachment = useSelect(
 		( select ) => ( id ? select( 'core' ).getMedia( id ) : null ),
 		[ id ]
@@ -45,7 +55,42 @@ export default function Edit( { attributes, setAttributes } ) {
 							setAttributes( { showSpeedControl: v } )
 						}
 					/>
+					<ToggleControl
+						label={ __(
+							'Show fullscreen button',
+							'jt-practice-player'
+						) }
+						checked={ showFullscreenControl }
+						onChange={ ( v ) =>
+							setAttributes( { showFullscreenControl: v } )
+						}
+					/>
 				</PanelBody>
+				<PanelColorSettings
+					title={ __( 'Player colors', 'jt-practice-player' ) }
+					colorSettings={ [
+						{
+							label: __( 'Accent', 'jt-practice-player' ),
+							value: accentColor,
+							onChange: ( value ) =>
+								setAttributes( { accentColor: value || '' } ),
+						},
+						{
+							label: __( 'Loop selection', 'jt-practice-player' ),
+							value: loopColor,
+							onChange: ( value ) =>
+								setAttributes( { loopColor: value || '' } ),
+						},
+						{
+							label: __( 'Playhead', 'jt-practice-player' ),
+							value: playheadColor,
+							onChange: ( value ) =>
+								setAttributes( {
+									playheadColor: value || '',
+								} ),
+						},
+					] }
+				/>
 			</InspectorControls>
 			{ ! id ? (
 				<MediaPlaceholder

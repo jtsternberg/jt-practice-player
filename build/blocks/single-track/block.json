@@ -23,6 +23,22 @@
     "showSpeedControl": {
       "type": "boolean",
       "default": true
+    },
+    "showFullscreenControl": {
+      "type": "boolean",
+      "default": true
+    },
+    "accentColor": {
+      "type": "string",
+      "default": ""
+    },
+    "loopColor": {
+      "type": "string",
+      "default": ""
+    },
+    "playheadColor": {
+      "type": "string",
+      "default": ""
     }
   },
   "supports": {

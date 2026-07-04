@@ -113,6 +113,7 @@ export class PracticePlayer {
 		this.zoomPxPerSec = 0;
 		this.loopFocusZoomPxPerSec = 0;
 		this.saveTimer = null;
+		this.stickyFrame = null;
 		this.restoring = false;
 		this.checkedIds = loadQueue( this.storageTrackIds );
 		this.volume = loadVolume();
@@ -120,6 +121,7 @@ export class PracticePlayer {
 		this.cacheElements();
 		this.restoreOrder();
 		this.bindControls();
+		this.bindStickyPlayer();
 		this.restoreQueue();
 		this.loadTrack( 0, false );
 		PLAYERS.add( this );
@@ -167,6 +169,7 @@ export class PracticePlayer {
 	}
 
 	cacheElements() {
+		this.shellEl = this.rootEl.querySelector( '.jtpp-shell' );
 		this.trackList = this.rootEl.querySelector( '.jtpp-tracklist' );
 		this.trackRows = Array.from(
 			this.rootEl.querySelectorAll( '.jtpp-track-row' )
@@ -182,6 +185,7 @@ export class PracticePlayer {
 		);
 		this.waveformEl = this.rootEl.querySelector( '.jtpp-waveform' );
 		this.fallbackEl = this.rootEl.querySelector( '.jtpp-fallback' );
+		this.panelEl = this.rootEl.querySelector( '.jtpp-panel' );
 		this.controlsEl = this.rootEl.querySelector( '.jtpp-controls' );
 		this.nowPlayingEl = this.rootEl.querySelector( '.jtpp-now-playing' );
 		this.nowTitleEl = this.rootEl.querySelector( '.jtpp-now-title' );
@@ -191,6 +195,7 @@ export class PracticePlayer {
 		this.totalTimeEl = this.rootEl.querySelector( '.jtpp-time-total' );
 		this.playButton = this.rootEl.querySelector( '.jtpp-play' );
 		this.loopButton = this.rootEl.querySelector( '.jtpp-loop' );
+		this.fullscreenButton = this.rootEl.querySelector( '.jtpp-fullscreen' );
 		this.loopToolsEl = this.rootEl.querySelector( '.jtpp-loop-tools' );
 		this.loopClearButton = this.rootEl.querySelector( '.jtpp-loop-clear' );
 		this.zoomOutButton = this.rootEl.querySelector( '.jtpp-zoom-out' );
@@ -203,6 +208,9 @@ export class PracticePlayer {
 	bindControls() {
 		this.playButton?.addEventListener( 'click', () => this.togglePlay() );
 		this.loopButton?.addEventListener( 'click', () => this.toggleLoop() );
+		this.fullscreenButton?.addEventListener( 'click', () =>
+			this.toggleFullscreen()
+		);
 		this.loopClearButton?.addEventListener( 'click', () =>
 			this.clearLoopRegion()
 		);
@@ -268,6 +276,60 @@ export class PracticePlayer {
 		this.rootEl.addEventListener( 'focusin', () => {
 			activePlayer = this;
 		} );
+		document.addEventListener( 'fullscreenchange', () =>
+			this.reflectFullscreen()
+		);
+	}
+
+	bindStickyPlayer() {
+		if ( ! this.shellEl || ! this.panelEl || ! this.trackList ) {
+			return;
+		}
+		this.shellEl.classList.add( 'has-sticky-player' );
+		window.addEventListener( 'scroll', this.requestStickyUpdate, {
+			passive: true,
+		} );
+		window.addEventListener( 'resize', this.requestStickyUpdate );
+		this.requestStickyUpdate();
+	}
+
+	requestStickyUpdate = () => {
+		if ( this.stickyFrame ) {
+			return;
+		}
+		this.stickyFrame = window.requestAnimationFrame( () => {
+			this.stickyFrame = null;
+			this.updateStickyPlayer();
+		} );
+	};
+
+	updateStickyPlayer() {
+		if ( ! this.shellEl || ! this.panelEl || ! this.trackList ) {
+			return;
+		}
+		const shellRect = this.shellEl.getBoundingClientRect();
+		const listRect = this.trackList.getBoundingClientRect();
+		const bottomGap = 10;
+		const panelHeight = this.panelEl.offsetHeight;
+		const viewportHeight = window.innerHeight;
+		const shouldStick =
+			this.trackRows.length > 4 &&
+			shellRect.top < viewportHeight - panelHeight - bottomGap &&
+			listRect.bottom > viewportHeight - bottomGap;
+
+		this.shellEl.style.setProperty(
+			'--jtpp-sticky-left',
+			`${ Math.max( 0, shellRect.left ) }px`
+		);
+		this.shellEl.style.setProperty(
+			'--jtpp-sticky-width',
+			`${ Math.max( 0, shellRect.width ) }px`
+		);
+		this.shellEl.style.setProperty(
+			'--jtpp-sticky-height',
+			`${ panelHeight }px`
+		);
+		this.shellEl.classList.toggle( 'is-player-stuck', shouldStick );
 	}
 
 	bindReordering() {
@@ -441,6 +503,7 @@ export class PracticePlayer {
 		this.waveSurfer.on( 'ready', () => {
 			this.restoreTrackState();
 			this.updateTimes();
+			this.requestStickyUpdate();
 			if ( autoplay ) {
 				this.play();
 			}
@@ -486,6 +549,7 @@ export class PracticePlayer {
 		this.focusLoopZoom();
 		this.reflectLoop();
 		this.scheduleSave();
+		this.requestStickyUpdate();
 	}
 
 	onRegionUpdated( region ) {
@@ -501,6 +565,7 @@ export class PracticePlayer {
 		this.focusLoopZoom();
 		this.reflectLoop();
 		this.scheduleSave();
+		this.requestStickyUpdate();
 	}
 
 	onRegionRemoved( region ) {
@@ -512,6 +577,7 @@ export class PracticePlayer {
 		this.resetZoom();
 		this.reflectLoop();
 		this.scheduleSave();
+		this.requestStickyUpdate();
 	}
 
 	attachRegionClear( region ) {
@@ -634,6 +700,7 @@ export class PracticePlayer {
 			this.focusLoopZoom();
 		}
 		this.reflectLoop();
+		this.requestStickyUpdate();
 	}
 
 	onTimeUpdate( time ) {
@@ -707,6 +774,31 @@ export class PracticePlayer {
 		}
 		this.reflectLoop();
 		this.scheduleSave();
+	}
+
+	toggleFullscreen() {
+		if ( ! this.fullscreenButton || ! document.fullscreenEnabled ) {
+			return;
+		}
+		if ( document.fullscreenElement === this.rootEl ) {
+			document.exitFullscreen?.();
+			return;
+		}
+		this.rootEl.requestFullscreen?.();
+	}
+
+	reflectFullscreen() {
+		const active = document.fullscreenElement === this.rootEl;
+		this.rootEl.classList.toggle( 'is-fullscreen', active );
+		this.fullscreenButton?.setAttribute(
+			'aria-pressed',
+			active ? 'true' : 'false'
+		);
+		this.fullscreenButton?.setAttribute(
+			'aria-label',
+			active ? 'Exit fullscreen' : 'Enter fullscreen'
+		);
+		this.requestStickyUpdate();
 	}
 
 	clearLoopRegion() {
@@ -828,6 +920,7 @@ export class PracticePlayer {
 				) }-${ formatTime( this.loop.end ) }`;
 			}
 		}
+		this.requestStickyUpdate();
 	}
 
 	cycleSpeed() {

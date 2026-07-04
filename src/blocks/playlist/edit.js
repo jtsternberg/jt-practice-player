@@ -7,6 +7,7 @@ import {
 	MediaUpload,
 	MediaUploadCheck,
 	InspectorControls,
+	PanelColorSettings,
 } from '@wordpress/block-editor';
 import {
 	PanelBody,
@@ -105,7 +106,15 @@ function TrackRow( {
 }
 
 export default function Edit( { attributes, setAttributes } ) {
-	const { tracks, showSkipButtons, showSpeedControl } = attributes;
+	const {
+		tracks,
+		showSkipButtons,
+		showSpeedControl,
+		showFullscreenControl,
+		accentColor,
+		loopColor,
+		playheadColor,
+	} = attributes;
 	const containerRef = useRef( null );
 	// Pointer-based reorder state. Native HTML5 drag/drop is unreliable inside
 	// the block-editor iframe (competing Gutenberg handlers swallow dragover),
@@ -147,7 +156,11 @@ export default function Edit( { attributes, setAttributes } ) {
 	// row's midpoint. Scoped to this block's rows only.
 	const gapAt = ( clientY ) => {
 		const rows = containerRef.current
-			? [ ...containerRef.current.querySelectorAll( '.jtpp-editor-track' ) ]
+			? [
+					...containerRef.current.querySelectorAll(
+						'.jtpp-editor-track'
+					),
+			  ]
 			: [];
 		for ( let i = 0; i < rows.length; i++ ) {
 			const rect = rows[ i ].getBoundingClientRect();
@@ -245,7 +258,42 @@ export default function Edit( { attributes, setAttributes } ) {
 							setAttributes( { showSpeedControl: v } )
 						}
 					/>
+					<ToggleControl
+						label={ __(
+							'Show fullscreen button',
+							'jt-practice-player'
+						) }
+						checked={ showFullscreenControl }
+						onChange={ ( v ) =>
+							setAttributes( { showFullscreenControl: v } )
+						}
+					/>
 				</PanelBody>
+				<PanelColorSettings
+					title={ __( 'Player colors', 'jt-practice-player' ) }
+					colorSettings={ [
+						{
+							label: __( 'Accent', 'jt-practice-player' ),
+							value: accentColor,
+							onChange: ( value ) =>
+								setAttributes( { accentColor: value || '' } ),
+						},
+						{
+							label: __( 'Loop selection', 'jt-practice-player' ),
+							value: loopColor,
+							onChange: ( value ) =>
+								setAttributes( { loopColor: value || '' } ),
+						},
+						{
+							label: __( 'Playhead', 'jt-practice-player' ),
+							value: playheadColor,
+							onChange: ( value ) =>
+								setAttributes( {
+									playheadColor: value || '',
+								} ),
+						},
+					] }
+				/>
 			</InspectorControls>
 			{ tracks.length === 0 ? (
 				<MediaPlaceholder
@@ -277,7 +325,8 @@ export default function Edit( { attributes, setAttributes } ) {
 							style={ { top: drag.y, left: drag.x } }
 							aria-hidden="true"
 						>
-							{ drag.title || __( 'Track', 'jt-practice-player' ) }
+							{ drag.title ||
+								__( 'Track', 'jt-practice-player' ) }
 						</div>
 					) }
 					<MediaUploadCheck>

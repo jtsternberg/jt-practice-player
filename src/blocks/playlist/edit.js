@@ -18,6 +18,14 @@ import {
 } from '@wordpress/components';
 import { dragHandle, chevronUp, chevronDown, trash } from '@wordpress/icons';
 
+// Where the dragged row would land, given the row being hovered and the
+// cursor's vertical position within it. Returns the gap index (0..count).
+function dropGap( event, hoverIndex ) {
+	const rect = event.currentTarget.getBoundingClientRect();
+	const below = event.clientY >= rect.top + rect.height / 2;
+	return below ? hoverIndex + 1 : hoverIndex;
+}
+
 function TrackRow( {
 	track,
 	index,
@@ -27,46 +35,77 @@ function TrackRow( {
 	remove,
 	draggingIndex,
 	setDraggingIndex,
+	dropGapIndex,
+	setDropGapIndex,
+	endDrag,
 } ) {
 	const attachment = useSelect(
 		( select ) => select( 'core' ).getMedia( track.id ),
 		[ track.id ]
 	);
-	const isDropTarget =
-		draggingIndex !== null && draggingIndex !== index && draggingIndex >= 0;
+	const dragging = draggingIndex !== null;
+	// A gap indicator is only meaningful when it would actually change order:
+	// not the two gaps flanking the dragged row itself.
+	const showAbove =
+		dragging &&
+		dropGapIndex === index &&
+		draggingIndex !== index &&
+		draggingIndex !== index - 1;
+	const showBelow =
+		dragging &&
+		dropGapIndex === index + 1 &&
+		draggingIndex !== index &&
+		draggingIndex !== index + 1;
 	return (
 		<Flex
 			className={ `jtpp-editor-track${
 				draggingIndex === index ? ' is-dragging' : ''
-			}${ isDropTarget ? ' is-drop-target' : '' }` }
+			}${ showAbove ? ' is-drop-above' : '' }${
+				showBelow ? ' is-drop-below' : ''
+			}` }
 			align="flex-end"
 			onDragOver={ ( event ) => {
-				if ( draggingIndex === null || draggingIndex === index ) {
+				if ( ! dragging ) {
 					return;
 				}
 				event.preventDefault();
 				event.dataTransfer.dropEffect = 'move';
+				setDropGapIndex( dropGap( event, index ) );
 			} }
 			onDrop={ ( event ) => {
 				event.preventDefault();
 				const from = Number(
 					event.dataTransfer.getData( 'text/plain' )
 				);
-				move( Number.isFinite( from ) ? from : draggingIndex, index );
-				setDraggingIndex( null );
+				const src = Number.isFinite( from ) ? from : draggingIndex;
+				const gap = dropGap( event, index );
+				// Translate the insertion gap into a destination index in the
+				// post-removal array that move() expects.
+				move( src, src < gap ? gap - 1 : gap );
+				endDrag();
 			} }
 		>
-			<Button
-				className="jtpp-editor-drag-handle"
-				icon={ dragHandle }
-				label={ __( 'Drag to reorder track', 'jt-practice-player' ) }
-				draggable
-				onDragStart={ ( event ) => {
+				<Button
+					className="jtpp-editor-drag-handle"
+					icon={ dragHandle }
+					label={ __( 'Drag to reorder track', 'jt-practice-player' ) }
+					draggable
+					onDragStart={ ( event ) => {
+						const row =
+							event.currentTarget.closest( '.jtpp-editor-track' );
+					if ( row && event.dataTransfer.setDragImage ) {
+						const rect = row.getBoundingClientRect();
+						event.dataTransfer.setDragImage(
+							row,
+							event.clientX - rect.left,
+							event.clientY - rect.top
+						);
+					}
 					setDraggingIndex( index );
 					event.dataTransfer.effectAllowed = 'move';
 					event.dataTransfer.setData( 'text/plain', String( index ) );
 				} }
-				onDragEnd={ () => setDraggingIndex( null ) }
+				onDragEnd={ endDrag }
 			/>
 			<FlexItem isBlock>
 				<TextControl
@@ -103,6 +142,11 @@ function TrackRow( {
 export default function Edit( { attributes, setAttributes } ) {
 	const { tracks, showSkipButtons, showSpeedControl } = attributes;
 	const [ draggingIndex, setDraggingIndex ] = useState( null );
+	const [ dropGapIndex, setDropGapIndex ] = useState( null );
+	const endDrag = () => {
+		setDraggingIndex( null );
+		setDropGapIndex( null );
+	};
 
 	const addMedia = ( media ) => {
 		const additions = ( Array.isArray( media ) ? media : [ media ] ).map(
@@ -184,6 +228,9 @@ export default function Edit( { attributes, setAttributes } ) {
 							remove={ remove }
 							draggingIndex={ draggingIndex }
 							setDraggingIndex={ setDraggingIndex }
+							dropGapIndex={ dropGapIndex }
+							setDropGapIndex={ setDropGapIndex }
+							endDrag={ endDrag }
 						/>
 					) ) }
 					<MediaUploadCheck>

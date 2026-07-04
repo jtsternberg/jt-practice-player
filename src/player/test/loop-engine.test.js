@@ -44,11 +44,15 @@ describe( 'nextSpeed', () => {
 	it( 'steps up', () => expect( nextSpeed( 0.75, 1 ) ).toBe( 0.8 ) );
 	it( 'clamps at the slow end', () =>
 		expect( nextSpeed( 0.5, -1 ) ).toBe( 0.5 ) );
-	it( 'clamps at full speed', () => expect( nextSpeed( 1, 1 ) ).toBe( 1 ) );
+	it( 'steps above full speed', () =>
+		expect( nextSpeed( 1, 1 ) ).toBe( 1.1 ) );
+	it( 'clamps at double speed', () => expect( nextSpeed( 2, 1 ) ).toBe( 2 ) );
 	it( 'snaps unknown rates to the nearest step first', () => {
 		expect( nextSpeed( 0.72, 1 ) ).toBe( 0.75 );
 	} );
 	it( 'exposes the canonical steps', () => {
-		expect( SPEED_STEPS ).toEqual( [ 0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 1 ] );
+		expect( SPEED_STEPS ).toEqual( [
+			0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 1, 1.1, 1.2, 1.25, 1.5, 1.75, 2,
+		] );
 	} );
 } );

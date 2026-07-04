@@ -13,8 +13,8 @@ Audio playlist and single-track blocks with waveform display and A-B section loo
 
 Two blocks -- Practice Playlist and Practice Track -- that render a waveform player
 (wavesurfer.js). Drag on the waveform to select a section and loop it while you
-practice. Includes playback-speed control, +/-15s skips, per-track memory of your
-loop and position, and keyboard shortcuts.
+practice. Includes playback-speed control, +/-15s skips, per-track loop memory,
+and keyboard shortcuts.
 
 == Usage ==
 
@@ -41,5 +41,6 @@ Keyboard shortcuts work when focus is inside a player: Space toggles playback,
 L toggles the loop, left/right arrows seek five seconds, Shift+left/right seek
 15 seconds, and up/down arrows change speed.
 
-Loop points, playback position, speed, playlist rotation, playlist order, and
-volume are saved locally in the visitor's browser and restored when they return.
+Loop points, speed, playlist rotation, playlist order, and volume are saved
+locally in the visitor's browser and restored when they return. Tracks start at
+the beginning, or at the saved loop start when a loop exists.

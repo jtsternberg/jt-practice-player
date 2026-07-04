@@ -23,7 +23,13 @@ let activePlayer = null;
 let keyboardBound = false;
 let mediaSessionBound = false;
 const SAVE_DELAY = 1000;
-const REGION_COLOR = 'rgba(63, 127, 95, 0.24)';
+const REGION_COLOR = 'rgba(214, 137, 42, 0.24)';
+const WAVE_COLOR = '#9aa1aa';
+const PROGRESS_COLOR = '#56616d';
+const CURSOR_COLOR = '#d6422b';
+const WAVEFORM_HEIGHT = 106;
+const LOOP_CONTEXT_SECONDS = 5;
+const ZOOM_STEP = 1.35;
 const PLAY_ICON =
 	'<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="7 5 19 12 7 19 7 5"></polygon></svg>';
 const PAUSE_ICON =
@@ -104,6 +110,8 @@ export class PracticePlayer {
 		this.region = null;
 		this.waveSurfer = null;
 		this.regions = null;
+		this.zoomPxPerSec = 0;
+		this.loopFocusZoomPxPerSec = 0;
 		this.saveTimer = null;
 		this.restoring = false;
 		this.checkedIds = loadQueue( this.storageTrackIds );
@@ -183,14 +191,34 @@ export class PracticePlayer {
 		this.totalTimeEl = this.rootEl.querySelector( '.jtpp-time-total' );
 		this.playButton = this.rootEl.querySelector( '.jtpp-play' );
 		this.loopButton = this.rootEl.querySelector( '.jtpp-loop' );
-		this.speedButton = this.rootEl.querySelector( '.jtpp-speed' );
+		this.loopToolsEl = this.rootEl.querySelector( '.jtpp-loop-tools' );
+		this.loopClearButton = this.rootEl.querySelector( '.jtpp-loop-clear' );
+		this.zoomOutButton = this.rootEl.querySelector( '.jtpp-zoom-out' );
+		this.zoomResetButton = this.rootEl.querySelector( '.jtpp-zoom-reset' );
+		this.zoomInButton = this.rootEl.querySelector( '.jtpp-zoom-in' );
+		this.speedSelect = this.rootEl.querySelector( '.jtpp-speed' );
 		this.volumeInput = this.rootEl.querySelector( '.jtpp-volume' );
 	}
 
 	bindControls() {
 		this.playButton?.addEventListener( 'click', () => this.togglePlay() );
 		this.loopButton?.addEventListener( 'click', () => this.toggleLoop() );
-		this.speedButton?.addEventListener( 'click', () => this.cycleSpeed() );
+		this.loopClearButton?.addEventListener( 'click', () =>
+			this.clearLoopRegion()
+		);
+		this.zoomOutButton?.addEventListener( 'click', () =>
+			this.stepZoom( -1 )
+		);
+		this.zoomResetButton?.addEventListener( 'click', () =>
+			this.focusLoopZoom()
+		);
+		this.zoomInButton?.addEventListener( 'click', () =>
+			this.stepZoom( 1 )
+		);
+		this.speedSelect?.addEventListener( 'change', () => {
+			this.applyRate( Number( this.speedSelect.value ) || 1 );
+			this.scheduleSave();
+		} );
 		this.rootEl
 			.querySelector( '.jtpp-back15' )
 			?.addEventListener( 'click', () => this.skip( -15 ) );
@@ -378,6 +406,8 @@ export class PracticePlayer {
 		this.activeIndex = index;
 		this.loop = null;
 		this.region = null;
+		this.zoomPxPerSec = 0;
+		this.loopFocusZoomPxPerSec = 0;
 		this.setFallbackMode( false );
 		this.updateActiveTrack();
 		this.createWaveSurfer( this.tracks[ index ], autoplay );
@@ -388,11 +418,12 @@ export class PracticePlayer {
 		this.waveSurfer = WaveSurfer.create( {
 			container: this.waveformEl,
 			url: track.url,
-			height: 88,
+			height: WAVEFORM_HEIGHT,
 			normalize: true,
-			waveColor: '#8a8f98',
-			progressColor: '#3f7f5f',
-			cursorColor: '#1f2933',
+			waveColor: WAVE_COLOR,
+			progressColor: PROGRESS_COLOR,
+			cursorColor: CURSOR_COLOR,
+			cursorWidth: 3,
 			plugins: [ this.regions ],
 		} );
 		this.waveSurfer.setVolume( this.volume );
@@ -451,6 +482,8 @@ export class PracticePlayer {
 		this.region = region;
 		this.attachRegionClear( region );
 		this.loop = { start: region.start, end: region.end, on: true };
+		this.seekLoopStart();
+		this.focusLoopZoom();
 		this.reflectLoop();
 		this.scheduleSave();
 	}
@@ -462,8 +495,10 @@ export class PracticePlayer {
 		this.loop = {
 			start: region.start,
 			end: region.end,
-			on: this.loop?.on ?? true,
+			on: true,
 		};
+		this.seekLoopStart();
+		this.focusLoopZoom();
 		this.reflectLoop();
 		this.scheduleSave();
 	}
@@ -474,6 +509,7 @@ export class PracticePlayer {
 		}
 		this.region = null;
 		this.loop = null;
+		this.resetZoom();
 		this.reflectLoop();
 		this.scheduleSave();
 	}
@@ -482,14 +518,80 @@ export class PracticePlayer {
 		const clear = document.createElement( 'button' );
 		clear.type = 'button';
 		clear.className = 'jtpp-region-clear';
-		clear.textContent = 'x';
+		clear.tabIndex = -1;
+		clear.textContent = '\u00d7';
 		clear.setAttribute( 'aria-label', 'Clear loop region' );
+		Object.assign( clear.style, {
+			position: 'absolute',
+			zIndex: '30',
+			top: '5px',
+			right: '5px',
+			display: 'inline-flex',
+			width: '20px',
+			height: '20px',
+			alignItems: 'center',
+			justifyContent: 'center',
+			padding: '0',
+			border: '1px solid rgba(214, 137, 42, 0.5)',
+			borderRadius: '999px',
+			color: '#1f2933',
+			fontSize: '16px',
+			fontWeight: '700',
+			lineHeight: '1',
+			background: '#fff',
+			opacity: '0',
+			pointerEvents: 'none',
+			boxShadow:
+				'0 1px 2px rgba(0, 0, 0, 0.18), 0 0 0 2px rgba(255, 255, 255, 0.72)',
+			cursor: 'pointer',
+			transition: 'opacity 120ms ease, transform 120ms ease',
+			transform: 'translateY(2px)',
+		} );
+		const setVisible = ( visible ) => {
+			clear.style.opacity = visible ? '1' : '0';
+			clear.style.pointerEvents = visible ? 'auto' : 'none';
+			clear.style.transform = visible
+				? 'translateY(0)'
+				: 'translateY(2px)';
+		};
 		clear.addEventListener( 'click', ( event ) => {
 			event.preventDefault();
 			event.stopPropagation();
-			region.remove();
+			this.clearLoopRegion();
 		} );
 		region.setContent( clear );
+		const rootNode = clear.getRootNode();
+		if (
+			rootNode?.querySelector &&
+			rootNode?.append &&
+			! rootNode.querySelector( 'style[data-jtpp-region-clear]' )
+		) {
+			const style = document.createElement( 'style' );
+			style.dataset.jtppRegionClear = 'true';
+			style.textContent = `
+				[part^="region "]:hover [part="region-content"] {
+					opacity: 1 !important;
+					pointer-events: auto !important;
+					transform: translateY(0) !important;
+				}
+			`;
+			rootNode.append( style );
+		}
+		const regionEl = clear.parentElement || region.element;
+		[ 'pointerenter', 'mouseenter', 'mouseover', 'focusin' ].forEach(
+			( eventName ) => {
+				regionEl?.addEventListener( eventName, () =>
+					setVisible( true )
+				);
+			}
+		);
+		[ 'pointerleave', 'mouseleave', 'mouseout', 'focusout' ].forEach(
+			( eventName ) => {
+				regionEl?.addEventListener( eventName, () =>
+					setVisible( false )
+				);
+			}
+		);
 	}
 
 	restoreTrackState() {
@@ -522,10 +624,14 @@ export class PracticePlayer {
 		this.restoring = false;
 
 		this.applyRate( state.rate || 1 );
-		if ( Number.isFinite( state.position ) ) {
+		if (
+			Number.isFinite( state.loopStart ) &&
+			Number.isFinite( state.loopEnd )
+		) {
 			this.waveSurfer.setTime(
-				clampSeek( state.position, this.waveSurfer.getDuration() )
+				clampSeek( state.loopStart, this.waveSurfer.getDuration() )
 			);
+			this.focusLoopZoom();
 		}
 		this.reflectLoop();
 	}
@@ -534,6 +640,8 @@ export class PracticePlayer {
 		const target = loopJumpTarget( time, this.loop );
 		if ( target !== null ) {
 			this.waveSurfer.setTime( target );
+			this.updateTimes();
+			this.scheduleSave();
 			return;
 		}
 		this.updateTimes();
@@ -592,9 +700,114 @@ export class PracticePlayer {
 		if ( ! this.loop || ! this.region ) {
 			return;
 		}
-		this.loop = { ...this.loop, on: ! this.loop.on };
+		const shouldLoop = ! this.loop.on;
+		this.loop = { ...this.loop, on: shouldLoop };
+		if ( shouldLoop ) {
+			this.seekLoopStart();
+		}
 		this.reflectLoop();
 		this.scheduleSave();
+	}
+
+	clearLoopRegion() {
+		this.region?.remove();
+	}
+
+	seekLoopStart() {
+		if ( ! this.loop || ! this.waveSurfer ) {
+			return;
+		}
+		this.waveSurfer.setTime(
+			clampSeek( this.loop.start, this.waveSurfer.getDuration() )
+		);
+		this.updateTimes();
+	}
+
+	focusLoopZoom() {
+		if ( ! this.loop || ! this.waveSurfer || ! this.waveformEl ) {
+			return;
+		}
+		const duration = this.waveSurfer.getDuration();
+		if ( ! Number.isFinite( duration ) || duration <= 0 ) {
+			return;
+		}
+		const width = this.visibleWaveformWidth();
+		if ( ! width ) {
+			return;
+		}
+		const selectionStart = Math.max( 0, this.loop.start );
+		const selectionEnd = Math.min( duration, this.loop.end );
+		const visibleStart = Math.max(
+			0,
+			selectionStart - LOOP_CONTEXT_SECONDS
+		);
+		const visibleEnd = Math.min(
+			duration,
+			selectionEnd + LOOP_CONTEXT_SECONDS
+		);
+		const visibleDuration = Math.max( 1, visibleEnd - visibleStart );
+		const fitZoom = Math.ceil( width / visibleDuration );
+		const fullTrackZoom = Math.ceil( width / duration );
+		this.loopFocusZoomPxPerSec = Math.max( fitZoom, fullTrackZoom + 1 );
+		this.applyZoom( this.loopFocusZoomPxPerSec, visibleStart );
+	}
+
+	stepZoom( direction ) {
+		if ( ! this.waveSurfer ) {
+			return;
+		}
+		const duration = this.waveSurfer.getDuration();
+		const width = this.visibleWaveformWidth();
+		if ( ! duration || ! width ) {
+			return;
+		}
+		const minZoom = Math.ceil( width / duration );
+		const currentZoom =
+			this.zoomPxPerSec || this.loopFocusZoomPxPerSec || minZoom;
+		const nextZoom =
+			direction > 0 ? currentZoom * ZOOM_STEP : currentZoom / ZOOM_STEP;
+		this.applyZoom( Math.max( minZoom, nextZoom ) );
+	}
+
+	applyZoom( pxPerSec, scrollTime = null ) {
+		if ( ! this.waveSurfer ) {
+			return;
+		}
+		this.zoomPxPerSec = pxPerSec;
+		this.waveSurfer.zoom( pxPerSec );
+		window.requestAnimationFrame( () => this.centerZoom( scrollTime ) );
+	}
+
+	visibleWaveformWidth() {
+		return Math.round(
+			this.waveformEl?.getBoundingClientRect().width ||
+				this.waveformEl?.offsetWidth ||
+				0
+		);
+	}
+
+	centerZoom( scrollTime = null ) {
+		if ( ! this.waveSurfer ) {
+			return;
+		}
+		if ( Number.isFinite( scrollTime ) ) {
+			this.waveSurfer.setScrollTime( Math.max( 0, scrollTime ) );
+			return;
+		}
+		const time = this.loop?.start ?? this.waveSurfer.getCurrentTime();
+		this.waveSurfer.setScrollTime(
+			Math.max( 0, time - LOOP_CONTEXT_SECONDS )
+		);
+	}
+
+	resetZoom() {
+		if ( ! this.waveSurfer ) {
+			return;
+		}
+		this.zoomPxPerSec = 0;
+		this.loopFocusZoomPxPerSec = 0;
+		this.waveSurfer.zoom( 0 );
+		this.waveSurfer.setScroll( 0 );
 	}
 
 	reflectLoop() {
@@ -604,20 +817,33 @@ export class PracticePlayer {
 			'aria-pressed',
 			active ? 'true' : 'false'
 		);
+		if ( this.loopToolsEl ) {
+			this.loopToolsEl.hidden = ! Boolean( this.loop && this.region );
+		}
+		if ( this.loopClearButton ) {
+			const hasSelection = Boolean( this.loop && this.region );
+			if ( hasSelection ) {
+				this.loopClearButton.textContent = `Clear selection: ${ formatTime(
+					this.loop.start
+				) }-${ formatTime( this.loop.end ) }`;
+			}
+		}
 	}
 
 	cycleSpeed() {
 		const current = this.waveSurfer?.getPlaybackRate?.() || 1;
 		const rate =
-			current === SPEED_STEPS[ 0 ] ? 1 : nextSpeed( current, -1 );
+			current === SPEED_STEPS[ SPEED_STEPS.length - 1 ]
+				? 1
+				: nextSpeed( current, 1 );
 		this.applyRate( rate );
 		this.scheduleSave();
 	}
 
 	applyRate( rate ) {
 		this.waveSurfer?.setPlaybackRate( rate, true );
-		if ( this.speedButton ) {
-			this.speedButton.textContent = `${ rate }\u00d7`;
+		if ( this.speedSelect ) {
+			this.speedSelect.value = String( rate );
 		}
 	}
 
@@ -717,6 +943,7 @@ export class PracticePlayer {
 		this.trackButtons.forEach( ( button, index ) => {
 			const active = index === this.activeIndex;
 			button.classList.toggle( 'is-active', active );
+			this.trackRows[ index ]?.classList.toggle( 'is-active', active );
 			if ( active ) {
 				button.setAttribute( 'aria-current', 'true' );
 			} else {
@@ -788,7 +1015,6 @@ export class PracticePlayer {
 			loopStart: this.loop?.start,
 			loopEnd: this.loop?.end,
 			loopOn: Boolean( this.loop?.on ),
-			position: this.waveSurfer.getCurrentTime(),
 			rate: this.waveSurfer.getPlaybackRate?.() || 1,
 		} );
 		saveVolume( this.volume );

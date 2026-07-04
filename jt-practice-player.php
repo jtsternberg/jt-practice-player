@@ -69,6 +69,9 @@ function render_player( array $tracks, array $options ): string {
 	?>
 	<script type="application/json" class="jtpp-data"><?php echo wp_json_encode( $payload ); ?></script>
 	<?php if ( $options['playlist'] ) : ?>
+	<div class="jtpp-shell">
+	<?php endif; ?>
+	<?php if ( $options['playlist'] ) : ?>
 	<ol class="jtpp-tracklist">
 		<?php foreach ( $tracks as $i => $track ) : ?>
 		<li class="jtpp-track-row" data-index="<?php echo esc_attr( $i ); ?>">
@@ -97,6 +100,14 @@ function render_player( array $tracks, array $options ): string {
 		<div class="jtpp-waveform"></div>
 		<div class="jtpp-fallback" hidden></div>
 		<div class="jtpp-times"><span class="jtpp-time-current">0:00</span><span class="jtpp-time-total">0:00</span></div>
+		<div class="jtpp-loop-tools" hidden>
+			<button type="button" class="jtpp-loop-clear"><?php esc_html_e( 'Clear selection', 'jt-practice-player' ); ?></button>
+			<div class="jtpp-zoom-controls" aria-label="<?php esc_attr_e( 'Selection zoom controls', 'jt-practice-player' ); ?>">
+				<button type="button" class="jtpp-zoom-out" aria-label="<?php esc_attr_e( 'Zoom out', 'jt-practice-player' ); ?>">&minus;</button>
+				<button type="button" class="jtpp-zoom-reset" aria-label="<?php esc_attr_e( 'Reset selection zoom', 'jt-practice-player' ); ?>"><?php esc_html_e( 'Fit loop', 'jt-practice-player' ); ?></button>
+				<button type="button" class="jtpp-zoom-in" aria-label="<?php esc_attr_e( 'Zoom in', 'jt-practice-player' ); ?>">+</button>
+			</div>
+		</div>
 		<div class="jtpp-controls">
 			<?php if ( $options['playlist'] ) : ?><button type="button" class="jtpp-prev" aria-label="<?php esc_attr_e( 'Previous track', 'jt-practice-player' ); ?>"><?php echo icon( 'prev' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button><?php endif; ?>
 			<button type="button" class="jtpp-start" aria-label="<?php esc_attr_e( 'Back to start of track', 'jt-practice-player' ); ?>"><?php echo icon( 'start' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button>
@@ -105,10 +116,19 @@ function render_player( array $tracks, array $options ): string {
 			<?php if ( $options['skip'] ) : ?><button type="button" class="jtpp-fwd15" aria-label="<?php esc_attr_e( 'Forward 15 seconds', 'jt-practice-player' ); ?>"><?php echo icon( 'fwd15' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button><?php endif; ?>
 			<?php if ( $options['playlist'] ) : ?><button type="button" class="jtpp-next" aria-label="<?php esc_attr_e( 'Next track', 'jt-practice-player' ); ?>"><?php echo icon( 'next' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button><?php endif; ?>
 			<button type="button" class="jtpp-loop" aria-label="<?php esc_attr_e( 'Toggle section loop', 'jt-practice-player' ); ?>" aria-pressed="false"><?php echo icon( 'loop' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button>
-			<?php if ( $options['speed'] ) : ?><button type="button" class="jtpp-speed" aria-label="<?php esc_attr_e( 'Playback speed', 'jt-practice-player' ); ?>">1&times;</button><?php endif; ?>
+			<?php if ( $options['speed'] ) : ?>
+			<select class="jtpp-speed" aria-label="<?php esc_attr_e( 'Playback speed', 'jt-practice-player' ); ?>">
+				<?php foreach ( array( '0.5', '0.6', '0.7', '0.75', '0.8', '0.9', '1', '1.1', '1.2', '1.25', '1.5', '1.75', '2' ) as $rate ) : ?>
+					<option value="<?php echo esc_attr( $rate ); ?>" <?php selected( '1', $rate ); ?>><?php echo esc_html( $rate ); ?>&times;</option>
+				<?php endforeach; ?>
+			</select>
+			<?php endif; ?>
 			<input type="range" class="jtpp-volume" min="0" max="1" step="0.05" value="1" aria-label="<?php esc_attr_e( 'Volume', 'jt-practice-player' ); ?>" />
 		</div>
 	</div>
+	<?php if ( $options['playlist'] ) : ?>
+	</div>
+	<?php endif; ?>
 	<noscript>
 		<?php foreach ( $tracks as $track ) : ?>
 		<p><?php echo esc_html( $track['title'] ); ?></p>

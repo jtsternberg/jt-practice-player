@@ -1,4 +1,6 @@
-export const SPEED_STEPS = [ 0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 1 ];
+export const SPEED_STEPS = [
+	0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 1, 1.1, 1.2, 1.25, 1.5, 1.75, 2,
+];
 
 export function loopJumpTarget( currentTime, loop ) {
 	if ( ! loop || ! loop.on || loop.end <= loop.start ) {

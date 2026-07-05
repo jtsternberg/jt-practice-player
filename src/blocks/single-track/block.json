@@ -1,0 +1,25 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "jtpp/track",
+	"title": "Practice Track",
+	"category": "media",
+	"icon": "controls-repeat",
+	"description": "Single audio track with waveform and A-B section looping for practice.",
+	"textdomain": "jt-practice-player",
+	"attributes": {
+		"id": { "type": "number", "default": 0 },
+		"customTitle": { "type": "string", "default": "" },
+		"showSkipButtons": { "type": "boolean", "default": true },
+		"showSpeedControl": { "type": "boolean", "default": true },
+		"showFullscreenControl": { "type": "boolean", "default": true },
+		"accentColor": { "type": "string", "default": "" },
+		"loopColor": { "type": "string", "default": "" },
+		"playheadColor": { "type": "string", "default": "" }
+	},
+	"supports": { "html": false },
+	"editorScript": "file:./index.js",
+	"style": "jtpp-player",
+	"viewScript": "jtpp-view",
+	"render": "file:./render.php"
+}

@@ -1,0 +1,776 @@
+.jtpp {
+	--jtpp-accent: #2f7d62;
+	--jtpp-ink: currentcolor;
+	--jtpp-muted: #6f776f;
+	--jtpp-line: color-mix(in srgb, currentcolor 14%, transparent);
+	--jtpp-hairline: color-mix(in srgb, currentcolor 9%, transparent);
+	--jtpp-panel: color-mix(in srgb, currentcolor 3%, transparent);
+	--jtpp-panel-strong: color-mix(in srgb, currentcolor 6%, transparent);
+	--jtpp-active: color-mix(in srgb, var(--jtpp-accent) 9%, transparent);
+	--jtpp-focus: color-mix(in srgb, var(--jtpp-accent) 52%, transparent);
+	--jtpp-loop: #d6892a;
+	--jtpp-loop-active: color-mix(in srgb, var(--jtpp-loop) 18%, transparent);
+	--jtpp-playhead: #d6422b;
+
+	max-width: 100%;
+	color: var(--jtpp-ink, currentcolor);
+	font-size: clamp(16px, 1rem, 18px);
+	line-height: 1.35;
+}
+
+.jtpp * {
+	box-sizing: border-box;
+}
+
+.jtpp:fullscreen {
+	width: 100vw;
+	height: 100vh;
+	padding: 24px;
+	overflow: auto;
+	background: Canvas;
+	color: CanvasText;
+}
+
+.jtpp-shell {
+	position: relative;
+	display: grid;
+	gap: 0;
+	padding: 12px 14px 14px;
+	border: 1px solid var(--jtpp-hairline);
+	border-radius: 8px;
+	background: linear-gradient(180deg, color-mix(in srgb, currentcolor 3%, transparent), transparent 54px);
+	box-shadow: 0 1px 0 color-mix(in srgb, currentcolor 5%, transparent);
+}
+
+.jtpp:fullscreen .jtpp-shell,
+.jtpp.is-fullscreen .jtpp-shell {
+	width: min(100%, 1100px);
+	min-height: calc(100vh - 48px);
+	margin: 0 auto;
+	background:
+		linear-gradient(180deg, color-mix(in srgb, currentcolor 3%, transparent), transparent 54px),
+		Canvas;
+}
+
+.jtpp-tracklist {
+	display: grid;
+	gap: 2px;
+	margin: 0 0 24px;
+	padding: 0;
+	border-block: 1px solid var(--jtpp-hairline);
+	list-style: none;
+}
+
+.jtpp-shell .jtpp-tracklist {
+	margin: 0;
+	border-block-start: 0;
+	border-block-end: 1px solid var(--jtpp-hairline);
+}
+
+.jtpp-track-row {
+	display: grid;
+	grid-template-columns: 28px 26px minmax(0, 1fr) 34px;
+	align-items: center;
+	column-gap: 8px;
+	min-height: 56px;
+	padding: 5px 0;
+	border-bottom: 1px solid var(--jtpp-hairline);
+	transition:
+		background-color 140ms ease,
+		opacity 140ms ease,
+		transform 140ms ease;
+}
+
+.jtpp-track-row:last-child {
+	border-bottom: 0;
+}
+
+.jtpp-track-row.is-dragging {
+	opacity: 0.42;
+}
+
+.jtpp-track-row.is-drop-target {
+	background: var(--jtpp-panel);
+}
+
+.jtpp-track-row.is-active {
+	background: var(--jtpp-active);
+	box-shadow:
+		inset 3px 0 0 var(--jtpp-accent),
+		0 1px 0 color-mix(in srgb, currentcolor 5%, transparent);
+}
+
+.jtpp-drag-handle,
+.jtpp-download {
+	display: inline-flex;
+	width: 28px;
+	height: 34px;
+	align-items: center;
+	justify-content: center;
+	border: 0 !important;
+	border-radius: 6px;
+	color: var(--jtpp-muted);
+	background: transparent !important;
+	box-shadow: none !important;
+	cursor: grab;
+	opacity: 0.52;
+	transition:
+		color 140ms ease,
+		background-color 140ms ease,
+		opacity 140ms ease;
+}
+
+.jtpp-drag-handle:active {
+	cursor: grabbing;
+}
+
+.jtpp-download {
+	width: 34px;
+	text-decoration: none;
+	cursor: pointer;
+}
+
+.jtpp-drag-handle:hover,
+.jtpp-drag-handle:focus-visible,
+.jtpp-download:hover,
+.jtpp-download:focus-visible {
+	color: var(--jtpp-accent);
+	background: var(--jtpp-active) !important;
+	outline: 2px solid transparent;
+}
+
+.jtpp-track-row:hover .jtpp-drag-handle,
+.jtpp-track-row:focus-within .jtpp-drag-handle,
+.jtpp-track-row:hover .jtpp-download,
+.jtpp-track-row:focus-within .jtpp-download {
+	opacity: 1;
+}
+
+.jtpp-queue-check {
+	position: relative;
+	width: 18px;
+	height: 18px;
+	margin: 0;
+	border: 1.5px solid color-mix(in srgb, currentcolor 26%, transparent);
+	border-radius: 999px;
+	appearance: none;
+	background: color-mix(in srgb, currentcolor 3%, transparent);
+	cursor: pointer;
+	opacity: 0.7;
+	transition:
+		border-color 140ms ease,
+		background-color 140ms ease,
+		opacity 140ms ease,
+		transform 140ms ease;
+}
+
+.jtpp-queue-check:checked {
+	border-color: var(--jtpp-accent);
+	background: color-mix(in srgb, var(--jtpp-accent) 18%, transparent);
+	opacity: 0.86;
+}
+
+.jtpp-queue-check:checked::after {
+	position: absolute;
+	top: 4px;
+	left: 4px;
+	width: 8px;
+	height: 8px;
+	border-radius: 999px;
+	background: var(--jtpp-accent);
+	content: "";
+}
+
+.jtpp-queue-check:focus-visible {
+	outline: 3px solid var(--jtpp-focus);
+	outline-offset: 2px;
+}
+
+.jtpp-track-row:hover .jtpp-queue-check,
+.jtpp-track-row:focus-within .jtpp-queue-check {
+	opacity: 1;
+}
+
+.jtpp .jtpp-track {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	width: 100%;
+	min-height: 48px;
+	align-items: center;
+	gap: 16px;
+	padding: 10px 13px;
+	border: 0 !important;
+	border-radius: 7px;
+	color: inherit !important;
+	font: inherit;
+	line-height: 1.25;
+	text-align: left;
+	background: transparent !important;
+	box-shadow: none !important;
+	cursor: pointer;
+	transition: background-color 140ms ease, color 140ms ease;
+}
+
+.jtpp .jtpp-track:hover,
+.jtpp .jtpp-track:focus-visible {
+	color: var(--jtpp-accent) !important;
+	background: var(--jtpp-panel) !important;
+	outline: none;
+}
+
+.jtpp .jtpp-track.is-active,
+.jtpp .jtpp-track[aria-current="true"] {
+	color: var(--jtpp-accent) !important;
+	background: transparent !important;
+	box-shadow: none !important;
+}
+
+.jtpp-track-title {
+	display: block;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	font-size: 0.98em;
+	font-weight: 640;
+}
+
+.jtpp-track-artist {
+	display: block;
+	margin-top: 3px;
+	color: var(--jtpp-muted);
+	font-size: 0.82em;
+	font-weight: 450;
+	overflow-wrap: anywhere;
+}
+
+.jtpp-track-duration {
+	color: var(--jtpp-muted);
+	font-size: 0.9em;
+	font-variant-numeric: tabular-nums;
+}
+
+.jtpp-panel {
+	display: grid;
+	gap: 13px;
+	padding: 14px;
+	border: 1px solid var(--jtpp-hairline);
+	border-radius: 8px;
+	background: linear-gradient(180deg, color-mix(in srgb, currentcolor 3%, transparent), transparent 42px);
+	box-shadow: 0 1px 0 color-mix(in srgb, currentcolor 5%, transparent);
+}
+
+.jtpp-shell .jtpp-panel {
+	padding: 16px 0 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
+.jtpp-shell.has-sticky-player.is-player-stuck {
+	padding-bottom: calc(var(--jtpp-sticky-height, 0px) + 28px);
+}
+
+.jtpp-shell.is-player-stuck .jtpp-panel {
+	position: fixed;
+	z-index: 50;
+	left: var(--jtpp-sticky-left, 0);
+	bottom: max(0px, env(safe-area-inset-bottom));
+	width: var(--jtpp-sticky-width, 100%);
+	padding: 12px 14px 14px;
+	border: 1px solid var(--jtpp-hairline);
+	border-bottom: 0;
+	border-radius: 0;
+	overflow: visible;
+	background:
+		linear-gradient(180deg, color-mix(in srgb, currentcolor 4%, transparent), transparent 42px),
+		color-mix(in srgb, Canvas 96%, currentcolor 4%);
+	box-shadow: 0 -1px 0 color-mix(in srgb, currentcolor 7%, transparent);
+}
+
+.jtpp-shell.is-player-stuck .jtpp-panel::before {
+	position: absolute;
+	right: 0;
+	bottom: 100%;
+	left: 0;
+	height: 22px;
+	background: linear-gradient(180deg, transparent, color-mix(in srgb, #000 13%, transparent));
+	content: "";
+	pointer-events: none;
+}
+
+.jtpp-now-playing {
+	display: flex;
+	align-items: center;
+	gap: 13px;
+	line-height: 1.25;
+	overflow-wrap: anywhere;
+}
+
+.jtpp-artwork {
+	width: 64px;
+	height: 64px;
+	flex: 0 0 64px;
+	border-radius: 7px;
+	object-fit: cover;
+	box-shadow: 0 1px 0 color-mix(in srgb, currentcolor 12%, transparent);
+}
+
+.jtpp-now-copy {
+	min-width: 0;
+}
+
+.jtpp-now-title {
+	font-size: 1.08rem;
+	font-weight: 730;
+}
+
+.jtpp-now-meta {
+	margin-top: 4px;
+	color: var(--jtpp-muted);
+	font-size: 0.92rem;
+}
+
+.jtpp-waveform {
+	height: 106px;
+	overflow: hidden;
+	border: 1px solid var(--jtpp-line);
+	border-radius: 7px;
+	background: color-mix(in srgb, currentcolor 4%, transparent);
+	touch-action: none;
+}
+
+.jtpp-waveform ::part(cursor) {
+	z-index: 8;
+	background: var(--jtpp-playhead);
+	box-shadow:
+		0 0 0 1px #fff,
+		0 0 0 2px color-mix(in srgb, var(--jtpp-playhead) 74%, transparent);
+}
+
+.jtpp-waveform ::part(region) {
+	z-index: 10;
+	background-color: color-mix(in srgb, var(--jtpp-loop) 24%, transparent) !important;
+	border-inline: 2px solid var(--jtpp-loop);
+}
+
+.jtpp-waveform ::part(region-handle) {
+	z-index: 11;
+	width: 12px;
+	background: color-mix(in srgb, var(--jtpp-loop) 72%, transparent);
+}
+
+.jtpp-region-clear {
+	position: absolute;
+	z-index: 30;
+	top: 5px;
+	right: 5px;
+	display: inline-flex;
+	width: 20px;
+	height: 20px;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid color-mix(in srgb, var(--jtpp-loop) 48%, transparent);
+	border-radius: 999px;
+	color: color-mix(in srgb, currentcolor 86%, #000);
+	font-size: 16px;
+	font-weight: 700;
+	line-height: 0;
+	background: #fff;
+	opacity: 0;
+	box-shadow:
+		0 1px 2px color-mix(in srgb, #000 18%, transparent),
+		0 0 0 2px color-mix(in srgb, #fff 72%, transparent);
+	cursor: pointer;
+	pointer-events: none;
+	transform: translateY(2px);
+	transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.jtpp-region-clear:hover,
+.jtpp-region-clear:focus-visible {
+	color: #000;
+	border-color: var(--jtpp-loop);
+	outline: none;
+}
+
+.jtpp-times {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	color: var(--jtpp-muted);
+	font-size: 0.9rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.jtpp-loop-tools {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-height: 30px;
+	margin: -2px 0 0;
+}
+
+.jtpp-loop-tools[hidden] {
+	display: none;
+}
+
+.jtpp-loop-clear {
+	padding: 4px 12px;
+	border: 1px solid color-mix(in srgb, var(--jtpp-loop) 44%, transparent);
+	border-radius: 999px;
+	color: color-mix(in srgb, currentcolor 78%, #000);
+	background: color-mix(in srgb, var(--jtpp-loop) 10%, transparent);
+	box-shadow: none;
+	font: inherit;
+	font-size: 0.82rem;
+	font-weight: 650;
+	letter-spacing: 0;
+	cursor: pointer;
+	transition:
+		border-color 140ms ease,
+		background-color 140ms ease,
+		color 140ms ease;
+}
+
+.jtpp-loop-clear:hover,
+.jtpp-loop-clear:focus-visible {
+	color: color-mix(in srgb, currentcolor 92%, #000);
+	border-color: var(--jtpp-loop);
+	background: color-mix(in srgb, var(--jtpp-loop) 16%, transparent);
+	outline: none;
+}
+
+.jtpp-zoom-controls {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	padding: 2px;
+	border: 1px solid var(--jtpp-line);
+	border-radius: 999px;
+	background: color-mix(in srgb, currentcolor 3%, transparent);
+}
+
+.jtpp-zoom-controls > button {
+	display: inline-flex;
+	min-width: 30px;
+	height: 26px;
+	align-items: center;
+	justify-content: center;
+	padding: 0 9px;
+	border: 0 !important;
+	border-radius: 999px;
+	color: inherit !important;
+	background: transparent !important;
+	box-shadow: none !important;
+	font: inherit;
+	font-size: 0.78rem;
+	font-weight: 700;
+	letter-spacing: 0;
+	cursor: pointer;
+	transition:
+		background-color 140ms ease,
+		color 140ms ease;
+}
+
+.jtpp-zoom-controls > button:hover,
+.jtpp-zoom-controls > button:focus-visible {
+	color: color-mix(in srgb, currentcolor 92%, #000) !important;
+	background: color-mix(in srgb, var(--jtpp-loop) 14%, transparent) !important;
+	outline: none;
+}
+
+.jtpp-controls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 2px 0 0;
+}
+
+.jtpp .jtpp-controls > button {
+	display: inline-flex;
+	width: 38px;
+	height: 38px;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	border: 1px solid var(--jtpp-line) !important;
+	border-radius: 999px;
+	color: inherit !important;
+	background: transparent !important;
+	box-shadow: none !important;
+	cursor: pointer;
+	transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease;
+}
+
+.jtpp .jtpp-controls > button:hover,
+.jtpp .jtpp-controls > button:focus-visible {
+	color: var(--jtpp-accent) !important;
+	border-color: var(--jtpp-accent) !important;
+	background: var(--jtpp-active) !important;
+	outline: none;
+}
+
+.jtpp .jtpp-controls .jtpp-play {
+	width: 50px;
+	height: 50px;
+	color: #fff !important;
+	border-color: var(--jtpp-accent) !important;
+	background: var(--jtpp-accent) !important;
+}
+
+.jtpp .jtpp-controls .jtpp-loop.is-active {
+	color: color-mix(in srgb, currentcolor 82%, #000) !important;
+	border-color: color-mix(in srgb, var(--jtpp-loop) 72%, transparent) !important;
+	background: var(--jtpp-loop-active) !important;
+}
+
+.jtpp-speed {
+	min-width: 72px;
+	width: auto !important;
+	height: 38px;
+	padding: 0 26px 0 12px !important;
+	border: 1px solid var(--jtpp-line);
+	border-radius: 999px;
+	color: inherit;
+	background: transparent;
+	box-shadow: none;
+	font-weight: 700;
+	letter-spacing: 0;
+	cursor: pointer;
+}
+
+.jtpp-speed:hover,
+.jtpp-speed:focus-visible {
+	color: var(--jtpp-accent);
+	border-color: var(--jtpp-accent);
+	background: var(--jtpp-active);
+	outline: none;
+}
+
+.jtpp-volume {
+	display: none;
+	width: 112px;
+	accent-color: var(--jtpp-accent);
+}
+
+.jtpp-fallback {
+	display: grid;
+	gap: 12px;
+	padding: 14px;
+	border: 1px dashed var(--jtpp-line);
+	border-radius: 7px;
+	background: var(--jtpp-panel);
+}
+
+.jtpp-fallback[hidden] {
+	display: none;
+}
+
+.jtpp-fallback p {
+	margin: 0;
+	color: var(--jtpp-muted);
+	font-size: 0.95rem;
+}
+
+.jtpp-fallback audio {
+	width: 100%;
+}
+
+.jtpp-editor {
+	display: grid;
+	gap: 10px;
+}
+
+// Each track is a distinct card: border, subtle fill, and internal padding
+// so the row's controls read as belonging to that one track.
+.jtpp-editor-track {
+	position: relative;
+	gap: 12px;
+	padding: 10px 12px;
+	border: 1px solid var(--jtpp-line, color-mix(in srgb, currentcolor 16%, transparent));
+	border-radius: 8px;
+	background: color-mix(in srgb, currentcolor 2.5%, transparent);
+	box-shadow: 0 1px 2px color-mix(in srgb, #000 4%, transparent);
+	transition:
+		background-color 140ms ease,
+		border-color 140ms ease,
+		opacity 140ms ease,
+		box-shadow 140ms ease;
+}
+
+.jtpp-editor-track:hover {
+	border-color: color-mix(in srgb, currentcolor 30%, transparent);
+	box-shadow: 0 2px 6px color-mix(in srgb, #000 7%, transparent);
+}
+
+.jtpp-editor-track.is-dragging {
+	opacity: 0.4;
+}
+
+// Title zone: leading track number + full-width input, margins zeroed so the
+// input sits flush inside the card.
+.jtpp-editor-track__field {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+}
+
+.jtpp-editor-track__index {
+	flex: 0 0 auto;
+	min-width: 20px;
+	color: color-mix(in srgb, currentcolor 55%, transparent);
+	font-size: 12px;
+	font-weight: 700;
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+.jtpp-editor-track .jtpp-editor-track__title {
+	flex: 1 1 auto;
+	margin: 0;
+}
+
+// Right-hand controls as a full-height column bled to the card's edge, so
+// the divider spans the whole row rather than floating beside the buttons.
+.jtpp-editor-track__controls {
+	display: flex;
+	align-self: stretch;
+	align-items: center;
+	gap: 8px;
+	// Cancel the card's padding on top/bottom/right so the column reaches its
+	// inner edges; round the right corners to match the card.
+	margin: -10px -12px -10px 0;
+	padding: 0 12px;
+	border-left: 1px solid var(--jtpp-line, color-mix(in srgb, currentcolor 16%, transparent));
+	border-radius: 0 7px 7px 0;
+	background: color-mix(in srgb, currentcolor 4%, transparent);
+}
+
+// Insertion indicator: a crisp line in the grid gap showing the slot the
+// dragged track will land in. The leading dot makes the target unmistakable.
+.jtpp-editor-track.is-drop-above::before,
+.jtpp-editor-track.is-drop-below::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	height: 3px;
+	border-radius: 999px;
+	background: var(--wp-admin-theme-color, #3858e9);
+	box-shadow:
+		0 0 0 1px color-mix(in srgb, #fff 70%, transparent),
+		-7px -1px 0 -1px var(--wp-admin-theme-color, #3858e9);
+	pointer-events: none;
+}
+
+.jtpp-editor-track.is-drop-above::before {
+	top: -6px;
+}
+
+.jtpp-editor-track.is-drop-below::after {
+	bottom: -6px;
+}
+
+.jtpp-editor-drag-handle {
+	align-self: center;
+	cursor: grab;
+	opacity: 0.72;
+	// Keep touch drags from scrolling the page instead of reordering.
+	touch-action: none;
+}
+
+.jtpp-editor-drag-handle:active {
+	cursor: grabbing;
+}
+
+// Floating ghost of the track being dragged; follows the pointer.
+.jtpp-editor-ghost {
+	position: fixed;
+	z-index: 999;
+	transform: translate(12px, 12px);
+	max-width: 260px;
+	padding: 6px 12px;
+	border-radius: 6px;
+	color: #fff;
+	font-size: 13px;
+	font-weight: 600;
+	line-height: 1.3;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	background: var(--wp-admin-theme-color, #3858e9);
+	box-shadow: 0 6px 18px color-mix(in srgb, #000 28%, transparent);
+	pointer-events: none;
+}
+
+.jtpp-editor-drag-handle:hover,
+.jtpp-editor-drag-handle:focus-visible {
+	opacity: 1;
+}
+
+// Vertical up/down mover styled like the editor block toolbar's mover:
+// two chevrons stacked into one compact, bordered control.
+.jtpp-editor-mover {
+	display: flex;
+	flex-direction: column;
+	align-self: center;
+	border: 1px solid var(--jtpp-line, color-mix(in srgb, currentcolor 16%, transparent));
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.jtpp-editor-mover .components-button.jtpp-editor-mover__button {
+	width: 28px;
+	min-width: 28px;
+	height: 18px;
+	padding: 0;
+	border-radius: 0;
+	color: inherit;
+}
+
+.jtpp-editor-mover .jtpp-editor-mover__button svg {
+	width: 20px;
+	height: 20px;
+}
+
+.jtpp-editor-mover .jtpp-editor-mover__button:first-child {
+	border-bottom: 1px solid var(--jtpp-line, color-mix(in srgb, currentcolor 16%, transparent));
+}
+
+.jtpp-editor-mover .components-button.jtpp-editor-mover__button:not(:disabled):hover {
+	background: color-mix(in srgb, var(--wp-admin-theme-color, #3858e9) 12%, transparent);
+}
+
+@media (min-width: 600px) {
+
+	.jtpp-volume {
+		display: inline-block;
+	}
+}
+
+@media (max-width: 520px) {
+
+	.jtpp-track-row {
+		grid-template-columns: 24px 22px minmax(0, 1fr) 32px;
+		column-gap: 6px;
+	}
+
+	.jtpp .jtpp-track {
+		padding-inline: 10px;
+	}
+
+	.jtpp-panel {
+		padding: 12px;
+	}
+
+	.jtpp-artwork {
+		width: 56px;
+		height: 56px;
+		flex-basis: 56px;
+	}
+}

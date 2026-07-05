@@ -1,0 +1,24 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 3,
+	"name": "jtpp/playlist",
+	"title": "Practice Playlist",
+	"category": "media",
+	"icon": "playlist-audio",
+	"description": "Audio playlist with waveform player and A-B section looping for practice.",
+	"textdomain": "jt-practice-player",
+	"attributes": {
+		"tracks": { "type": "array", "default": [] },
+		"showSkipButtons": { "type": "boolean", "default": true },
+		"showSpeedControl": { "type": "boolean", "default": true },
+		"showFullscreenControl": { "type": "boolean", "default": true },
+		"accentColor": { "type": "string", "default": "" },
+		"loopColor": { "type": "string", "default": "" },
+		"playheadColor": { "type": "string", "default": "" }
+	},
+	"supports": { "html": false, "align": [ "wide" ] },
+	"editorScript": "file:./index.js",
+	"style": "jtpp-player",
+	"viewScript": "jtpp-view",
+	"render": "file:./render.php"
+}

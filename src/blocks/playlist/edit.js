@@ -19,6 +19,32 @@ import {
 } from '@wordpress/components';
 import { dragHandle, chevronUp, chevronDown, trash } from '@wordpress/icons';
 
+// Shape appended when the author adds a manual external-URL track. Attachment
+// tracks carry an `id`; external tracks never do, which is how rows and the
+// PHP render layer tell them apart.
+const NEW_EXTERNAL_TRACK = {
+	url: '',
+	title: '',
+	artist: '',
+	album: '',
+	artwork: '',
+	duration: '',
+};
+
+// Client-side shape warning only (per plan: never fetch remote URLs here).
+function urlLooksInvalid( value ) {
+	if ( ! value ) {
+		return false;
+	}
+	try {
+		// eslint-disable-next-line no-new
+		new URL( value );
+		return false;
+	} catch ( e ) {
+		return true;
+	}
+}
+
 function TrackRow( {
 	track,
 	index,
@@ -29,11 +55,14 @@ function TrackRow( {
 	drag,
 	startDrag,
 } ) {
+	const isExternal = ! track.id;
 	const attachment = useSelect(
-		( select ) => select( 'core' ).getMedia( track.id ),
+		( select ) => ( track.id ? select( 'core' ).getMedia( track.id ) : null ),
 		[ track.id ]
 	);
-	const title = track.customTitle || attachment?.title?.rendered || '';
+	const title = isExternal
+		? track.title || track.url || ''
+		: track.customTitle || attachment?.title?.rendered || '';
 	const isSource = drag && drag.from === index;
 	// The insertion line lives in the gap above (index) or below (index + 1)
 	// this row, suppressed for the two gaps flanking the row being dragged.
@@ -49,10 +78,12 @@ function TrackRow( {
 		drag.from !== index + 1;
 	return (
 		<Flex
-			className={ `jtpp-editor-track${ isSource ? ' is-dragging' : '' }${
+			className={ `jtpp-editor-track${
+				isExternal ? ' jtpp-editor-track--external' : ''
+			}${ isSource ? ' is-dragging' : '' }${
 				showAbove ? ' is-drop-above' : ''
 			}${ showBelow ? ' is-drop-below' : '' }` }
-			align="center"
+			align={ isExternal ? 'flex-start' : 'center' }
 		>
 			<Button
 				className="jtpp-editor-drag-handle"
@@ -64,17 +95,127 @@ function TrackRow( {
 				<span className="jtpp-editor-track__index" aria-hidden="true">
 					{ index + 1 }
 				</span>
-				<TextControl
-					className="jtpp-editor-track__title"
-					label={ __( 'Track title', 'jt-practice-player' ) }
-					hideLabelFromVision
-					__nextHasNoMarginBottom
-					value={ track.customTitle || '' }
-					placeholder={ attachment?.title?.rendered || '...' }
-					onChange={ ( v ) =>
-						update( index, { ...track, customTitle: v } )
-					}
-				/>
+				<div className="jtpp-editor-track__fields">
+					{ isExternal ? (
+						<>
+							<TextControl
+								className="jtpp-editor-track__title"
+								label={ __( 'Title', 'jt-practice-player' ) }
+								__nextHasNoMarginBottom
+								value={ track.title || '' }
+								placeholder={ __(
+									'Song title',
+									'jt-practice-player'
+								) }
+								onChange={ ( v ) =>
+									update( index, { ...track, title: v } )
+								}
+							/>
+							<TextControl
+								type="url"
+								label={ __(
+									'Audio URL',
+									'jt-practice-player'
+								) }
+								__nextHasNoMarginBottom
+								value={ track.url || '' }
+								placeholder="https://…"
+								onChange={ ( v ) =>
+									update( index, { ...track, url: v } )
+								}
+								help={
+									urlLooksInvalid( track.url )
+										? __(
+												'This doesn’t look like a valid URL.',
+												'jt-practice-player'
+										  )
+										: undefined
+								}
+							/>
+							<div className="jtpp-editor-track__meta">
+								<TextControl
+									label={ __(
+										'Artist',
+										'jt-practice-player'
+									) }
+									__nextHasNoMarginBottom
+									value={ track.artist || '' }
+									onChange={ ( v ) =>
+										update( index, {
+											...track,
+											artist: v,
+										} )
+									}
+								/>
+								<TextControl
+									label={ __(
+										'Album',
+										'jt-practice-player'
+									) }
+									__nextHasNoMarginBottom
+									value={ track.album || '' }
+									onChange={ ( v ) =>
+										update( index, {
+											...track,
+											album: v,
+										} )
+									}
+								/>
+								<TextControl
+									label={ __(
+										'Duration',
+										'jt-practice-player'
+									) }
+									__nextHasNoMarginBottom
+									value={ track.duration || '' }
+									placeholder="3:42"
+									onChange={ ( v ) =>
+										update( index, {
+											...track,
+											duration: v,
+										} )
+									}
+								/>
+							</div>
+							<TextControl
+								type="url"
+								label={ __(
+									'Artwork URL',
+									'jt-practice-player'
+								) }
+								__nextHasNoMarginBottom
+								value={ track.artwork || '' }
+								placeholder="https://…"
+								onChange={ ( v ) =>
+									update( index, { ...track, artwork: v } )
+								}
+								help={
+									urlLooksInvalid( track.artwork )
+										? __(
+												'This doesn’t look like a valid URL.',
+												'jt-practice-player'
+										  )
+										: undefined
+								}
+							/>
+						</>
+					) : (
+						<TextControl
+							className="jtpp-editor-track__title"
+							label={ __(
+								'Track title',
+								'jt-practice-player'
+							) }
+							hideLabelFromVision
+							__nextHasNoMarginBottom
+							value={ track.customTitle || '' }
+							placeholder={ attachment?.title?.rendered || '...' }
+							onChange={ ( v ) =>
+								update( index, { ...track, customTitle: v } )
+							}
+						/>
+					) }
+				</div>
 			</FlexItem>
 			<div className="jtpp-editor-track__controls">
 				<div className="jtpp-editor-mover">
@@ -131,6 +272,8 @@ export default function Edit( { attributes, setAttributes } ) {
 		);
 		setAttributes( { tracks: [ ...tracks, ...additions ] } );
 	};
+	const addExternal = () =>
+		setAttributes( { tracks: [ ...tracks, { ...NEW_EXTERNAL_TRACK } ] } );
 	const update = ( i, track ) =>
 		setAttributes( {
 			tracks: tracks.map( ( t, n ) => ( n === i ? track : t ) ),
@@ -296,14 +439,29 @@ export default function Edit( { attributes, setAttributes } ) {
 				/>
 			</InspectorControls>
 			{ tracks.length === 0 ? (
-				<MediaPlaceholder
-					allowedTypes={ [ 'audio' ] }
-					multiple
-					labels={ {
-						title: __( 'Practice Playlist', 'jt-practice-player' ),
-					} }
-					onSelect={ addMedia }
-				/>
+				<>
+					<MediaPlaceholder
+						allowedTypes={ [ 'audio' ] }
+						multiple
+						labels={ {
+							title: __(
+								'Practice Playlist',
+								'jt-practice-player'
+							),
+						} }
+						onSelect={ addMedia }
+					/>
+					<Button
+						className="jtpp-editor-add-external"
+						variant="tertiary"
+						onClick={ addExternal }
+					>
+						{ __(
+							'Add external URL track',
+							'jt-practice-player'
+						) }
+					</Button>
+				</>
 			) : (
 				<>
 					{ tracks.map( ( track, i ) => (
@@ -329,18 +487,36 @@ export default function Edit( { attributes, setAttributes } ) {
 								__( 'Track', 'jt-practice-player' ) }
 						</div>
 					) }
-					<MediaUploadCheck>
-						<MediaUpload
-							allowedTypes={ [ 'audio' ] }
-							multiple
-							onSelect={ addMedia }
-							render={ ( { open } ) => (
-								<Button variant="secondary" onClick={ open }>
-									{ __( 'Add tracks', 'jt-practice-player' ) }
-								</Button>
+					<Flex
+						className="jtpp-editor-actions"
+						justify="flex-start"
+						expanded={ false }
+					>
+						<MediaUploadCheck>
+							<MediaUpload
+								allowedTypes={ [ 'audio' ] }
+								multiple
+								onSelect={ addMedia }
+								render={ ( { open } ) => (
+									<Button
+										variant="secondary"
+										onClick={ open }
+									>
+										{ __(
+											'Add tracks',
+											'jt-practice-player'
+										) }
+									</Button>
+								) }
+							/>
+						</MediaUploadCheck>
+						<Button variant="tertiary" onClick={ addExternal }>
+							{ __(
+								'Add external URL',
+								'jt-practice-player'
 							) }
-						/>
-					</MediaUploadCheck>
+						</Button>
+					</Flex>
 				</>
 			) }
 		</div>

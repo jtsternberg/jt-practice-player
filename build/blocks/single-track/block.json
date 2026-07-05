@@ -16,6 +16,10 @@
       "type": "string",
       "default": ""
     },
+    "source": {
+      "type": "string",
+      "default": ""
+    },
     "externalUrl": {
       "type": "string",
       "default": ""

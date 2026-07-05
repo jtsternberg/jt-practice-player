@@ -10,6 +10,7 @@
 	"attributes": {
 		"id": { "type": "number", "default": 0 },
 		"customTitle": { "type": "string", "default": "" },
+		"source": { "type": "string", "default": "" },
 		"externalUrl": { "type": "string", "default": "" },
 		"externalTitle": { "type": "string", "default": "" },
 		"externalArtist": { "type": "string", "default": "" },

@@ -630,9 +630,53 @@
 	text-align: right;
 }
 
-.jtpp-editor-track .jtpp-editor-track__title {
+// Field column: one row for attachment tracks, a stack of inputs for
+// external-URL tracks.
+.jtpp-editor-track__fields {
+	display: flex;
 	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 8px;
+	min-width: 0;
+}
+
+.jtpp-editor-track .jtpp-editor-track__title {
 	margin: 0;
+}
+
+// External tracks are multi-line, so top-align the row and nudge the index
+// down to sit beside the first field label.
+.jtpp-editor-track--external {
+	align-items: flex-start;
+}
+
+.jtpp-editor-track--external .jtpp-editor-track__field {
+	align-items: flex-start;
+}
+
+.jtpp-editor-track--external .jtpp-editor-track__index {
+	margin-top: 3px;
+}
+
+.jtpp-editor-track__meta {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 8px;
+}
+
+// Add-track actions and the empty-state external button.
+.jtpp-editor-actions {
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.jtpp-editor-add-external {
+	margin-top: 8px;
+}
+
+// Single Track: Media Library / External URL source switch.
+.jtpp-editor-source {
+	margin-bottom: 12px;
 }
 
 // Right-hand controls as a full-height column bled to the card's edge, so

@@ -7,7 +7,7 @@ import {
 	memo,
 	Fragment,
 } from '@wordpress/element';
-import { useSelect } from '@wordpress/data';
+import { useSelect, useDispatch } from '@wordpress/data';
 import {
 	useBlockProps,
 	MediaPlaceholder,
@@ -291,7 +291,7 @@ function TrackSettings( {
 	);
 }
 
-export default function Edit( { attributes, setAttributes } ) {
+export default function Edit( { attributes, setAttributes, clientId } ) {
 	const {
 		tracks,
 		showSkipButtons,
@@ -307,6 +307,23 @@ export default function Edit( { attributes, setAttributes } ) {
 
 	const tracksRef = useRef( tracks );
 	tracksRef.current = tracks;
+
+	// The canvas is all custom interactive controls, so clicking it doesn't
+	// reliably select the block the way plain content does — which hides the
+	// block's InspectorControls (player options/colors). Select it explicitly
+	// on interaction so those panels stay available.
+	const { selectBlock } = useDispatch( 'core/block-editor' );
+	const isSelected = useSelect(
+		( select ) =>
+			select( 'core/block-editor' ).getSelectedBlockClientId() ===
+			clientId,
+		[ clientId ]
+	);
+	const ensureSelected = useCallback( () => {
+		if ( clientId && ! isSelected ) {
+			selectBlock( clientId );
+		}
+	}, [ clientId, isSelected, selectBlock ] );
 
 	// Selecting a track reveals its inline editor below the preview. Editing
 	// lives in the canvas (not the sidebar) because the block's canvas render
@@ -460,6 +477,9 @@ export default function Edit( { attributes, setAttributes } ) {
 		<div
 			{ ...useBlockProps( { className: 'jtpp-editor' } ) }
 			ref={ containerRef }
+			onPointerDownCapture={ ensureSelected }
+			onMouseDownCapture={ ensureSelected }
+			onFocusCapture={ ensureSelected }
 		>
 			<InspectorControls>
 				<PanelBody

@@ -24,6 +24,7 @@ import {
 	FlexItem,
 } from '@wordpress/components';
 import { dragHandle, chevronUp, chevronDown, trash } from '@wordpress/icons';
+import DebouncedText from '../../components/debounced-text';
 
 // Shape appended when the author adds a manual external-URL track. Attachment
 // tracks carry an `id`; external tracks never do, which is how rows and the
@@ -57,7 +58,7 @@ const TrackRow = memo( function TrackRow( {
 	track,
 	index,
 	count,
-	update,
+	setField,
 	move,
 	remove,
 	drag,
@@ -106,7 +107,7 @@ const TrackRow = memo( function TrackRow( {
 				<div className="jtpp-editor-track__fields">
 					{ isExternal ? (
 						<>
-							<TextControl
+							<DebouncedText
 								className="jtpp-editor-track__title"
 								label={ __( 'Title', 'jt-practice-player' ) }
 								__nextHasNoMarginBottom
@@ -116,10 +117,10 @@ const TrackRow = memo( function TrackRow( {
 									'jt-practice-player'
 								) }
 								onChange={ ( v ) =>
-									update( index, { ...track, title: v } )
+									setField( index, 'title', v )
 								}
 							/>
-							<TextControl
+							<DebouncedText
 								type="url"
 								label={ __(
 									'Audio URL',
@@ -128,9 +129,7 @@ const TrackRow = memo( function TrackRow( {
 								__nextHasNoMarginBottom
 								value={ track.url || '' }
 								placeholder="https://…"
-								onChange={ ( v ) =>
-									update( index, { ...track, url: v } )
-								}
+								onChange={ ( v ) => setField( index, 'url', v ) }
 								help={
 									urlLooksInvalid( track.url )
 										? __(
@@ -141,7 +140,7 @@ const TrackRow = memo( function TrackRow( {
 								}
 							/>
 							<div className="jtpp-editor-track__meta">
-								<TextControl
+								<DebouncedText
 									label={ __(
 										'Artist',
 										'jt-practice-player'
@@ -149,13 +148,10 @@ const TrackRow = memo( function TrackRow( {
 									__nextHasNoMarginBottom
 									value={ track.artist || '' }
 									onChange={ ( v ) =>
-										update( index, {
-											...track,
-											artist: v,
-										} )
+										setField( index, 'artist', v )
 									}
 								/>
-								<TextControl
+								<DebouncedText
 									label={ __(
 										'Album',
 										'jt-practice-player'
@@ -163,13 +159,10 @@ const TrackRow = memo( function TrackRow( {
 									__nextHasNoMarginBottom
 									value={ track.album || '' }
 									onChange={ ( v ) =>
-										update( index, {
-											...track,
-											album: v,
-										} )
+										setField( index, 'album', v )
 									}
 								/>
-								<TextControl
+								<DebouncedText
 									label={ __(
 										'Duration',
 										'jt-practice-player'
@@ -178,14 +171,11 @@ const TrackRow = memo( function TrackRow( {
 									value={ track.duration || '' }
 									placeholder="3:42"
 									onChange={ ( v ) =>
-										update( index, {
-											...track,
-											duration: v,
-										} )
+										setField( index, 'duration', v )
 									}
 								/>
 							</div>
-							<TextControl
+							<DebouncedText
 								type="url"
 								label={ __(
 									'Artwork URL',
@@ -195,7 +185,7 @@ const TrackRow = memo( function TrackRow( {
 								value={ track.artwork || '' }
 								placeholder="https://…"
 								onChange={ ( v ) =>
-									update( index, { ...track, artwork: v } )
+									setField( index, 'artwork', v )
 								}
 								help={
 									urlLooksInvalid( track.artwork )
@@ -208,7 +198,7 @@ const TrackRow = memo( function TrackRow( {
 							/>
 						</>
 					) : (
-						<TextControl
+						<DebouncedText
 							className="jtpp-editor-track__title"
 							label={ __(
 								'Track title',
@@ -219,7 +209,7 @@ const TrackRow = memo( function TrackRow( {
 							value={ track.customTitle || '' }
 							placeholder={ attachment?.title?.rendered || '...' }
 							onChange={ ( v ) =>
-								update( index, { ...track, customTitle: v } )
+								setField( index, 'customTitle', v )
 							}
 						/>
 					) }
@@ -295,11 +285,13 @@ export default function Edit( { attributes, setAttributes } ) {
 			} ),
 		[ setAttributes ]
 	);
-	const update = useCallback(
-		( i, track ) =>
+	// Merge a single field against the latest track so debounced writes from
+	// different fields of the same row can't clobber each other.
+	const setField = useCallback(
+		( i, key, value ) =>
 			setAttributes( {
 				tracks: tracksRef.current.map( ( t, n ) =>
-					n === i ? track : t
+					n === i ? { ...t, [ key ]: value } : t
 				),
 			} ),
 		[ setAttributes ]
@@ -505,7 +497,7 @@ export default function Edit( { attributes, setAttributes } ) {
 							track={ track }
 							index={ i }
 							count={ tracks.length }
-							update={ update }
+							setField={ setField }
 							move={ move }
 							remove={ remove }
 							drag={ drag }

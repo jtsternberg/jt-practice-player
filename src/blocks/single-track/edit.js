@@ -9,11 +9,11 @@ import {
 import {
 	PanelBody,
 	ToggleControl,
-	TextControl,
 	Button,
 	ButtonGroup,
 	Notice,
 } from '@wordpress/components';
+import DebouncedText from '../../components/debounced-text';
 
 // Client-side shape warning only (per plan: never fetch remote URLs here).
 function urlLooksInvalid( value ) {
@@ -164,7 +164,7 @@ export default function Edit( { attributes, setAttributes } ) {
 				) : (
 					<div className="jtpp-editor-track">
 						<div className="jtpp-editor-track__fields">
-							<TextControl
+							<DebouncedText
 								label={ __(
 									'Track title',
 									'jt-practice-player'
@@ -196,7 +196,7 @@ export default function Edit( { attributes, setAttributes } ) {
 			) : (
 				<div className="jtpp-editor-track jtpp-editor-track--external">
 					<div className="jtpp-editor-track__fields">
-						<TextControl
+						<DebouncedText
 							type="url"
 							label={ __( 'Audio URL', 'jt-practice-player' ) }
 							__nextHasNoMarginBottom
@@ -222,7 +222,7 @@ export default function Edit( { attributes, setAttributes } ) {
 								) }
 							</Notice>
 						) }
-						<TextControl
+						<DebouncedText
 							label={ __( 'Title', 'jt-practice-player' ) }
 							__nextHasNoMarginBottom
 							value={ externalTitle }
@@ -235,7 +235,7 @@ export default function Edit( { attributes, setAttributes } ) {
 							}
 						/>
 						<div className="jtpp-editor-track__meta">
-							<TextControl
+							<DebouncedText
 								label={ __( 'Artist', 'jt-practice-player' ) }
 								__nextHasNoMarginBottom
 								value={ externalArtist }
@@ -243,7 +243,7 @@ export default function Edit( { attributes, setAttributes } ) {
 									setAttributes( { externalArtist: v } )
 								}
 							/>
-							<TextControl
+							<DebouncedText
 								label={ __( 'Album', 'jt-practice-player' ) }
 								__nextHasNoMarginBottom
 								value={ externalAlbum }
@@ -251,7 +251,7 @@ export default function Edit( { attributes, setAttributes } ) {
 									setAttributes( { externalAlbum: v } )
 								}
 							/>
-							<TextControl
+							<DebouncedText
 								label={ __(
 									'Duration',
 									'jt-practice-player'
@@ -264,7 +264,7 @@ export default function Edit( { attributes, setAttributes } ) {
 								}
 							/>
 						</div>
-						<TextControl
+						<DebouncedText
 							type="url"
 							label={ __( 'Artwork URL', 'jt-practice-player' ) }
 							__nextHasNoMarginBottom

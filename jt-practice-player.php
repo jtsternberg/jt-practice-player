@@ -36,24 +36,66 @@ function resolve_tracks( array $refs ): array {
 	foreach ( $refs as $ref ) {
 		$id  = isset( $ref['id'] ) ? (int) $ref['id'] : 0;
 		$url = $id ? wp_get_attachment_url( $id ) : false;
-		if ( ! $url ) {
+		if ( $url ) {
+			$tracks[] = resolve_attachment_track( $id, $url, $ref );
 			continue;
 		}
-		$url      = set_url_scheme( $url );
-		$meta     = wp_get_attachment_metadata( $id );
-		$thumb_id = get_post_thumbnail_id( $id );
-		$artwork  = $thumb_id ? wp_get_attachment_image_src( $thumb_id, 'thumbnail' ) : false;
-		$tracks[] = array(
-			'id'       => $id,
-			'url'      => $url,
-			'title'    => ! empty( $ref['customTitle'] ) ? $ref['customTitle'] : get_the_title( $id ),
-			'artist'   => $meta['artist'] ?? '',
-			'album'    => $meta['album'] ?? '',
-			'artwork'  => $artwork ? set_url_scheme( $artwork[0] ) : '',
-			'duration' => $meta['length_formatted'] ?? '',
-		);
+		$track = resolve_external_track( $ref );
+		if ( $track ) {
+			$tracks[] = $track;
+		}
 	}
 	return $tracks;
+}
+
+function resolve_attachment_track( int $id, string $url, array $ref ): array {
+	$meta     = wp_get_attachment_metadata( $id );
+	$thumb_id = get_post_thumbnail_id( $id );
+	$artwork  = $thumb_id ? wp_get_attachment_image_src( $thumb_id, 'thumbnail' ) : false;
+
+	return array(
+		'id'       => $id,
+		'url'      => set_url_scheme( $url ),
+		'title'    => ! empty( $ref['customTitle'] ) ? sanitize_text_field( $ref['customTitle'] ) : get_the_title( $id ),
+		'artist'   => sanitize_text_field( $meta['artist'] ?? '' ),
+		'album'    => sanitize_text_field( $meta['album'] ?? '' ),
+		'artwork'  => $artwork ? set_url_scheme( $artwork[0] ) : '',
+		'duration' => sanitize_text_field( $meta['length_formatted'] ?? '' ),
+	);
+}
+
+function resolve_external_track( array $ref ): ?array {
+	$url = sanitize_external_url( $ref['url'] ?? '' );
+	if ( ! $url ) {
+		return null;
+	}
+
+	$title = sanitize_text_field( $ref['title'] ?? '' );
+
+	return array(
+		'id'       => 'url:' . substr( md5( $url ), 0, 16 ),
+		'url'      => $url,
+		'title'    => $title ? $title : title_from_url( $url ),
+		'artist'   => sanitize_text_field( $ref['artist'] ?? '' ),
+		'album'    => sanitize_text_field( $ref['album'] ?? '' ),
+		'artwork'  => sanitize_external_url( $ref['artwork'] ?? '' ),
+		'duration' => sanitize_text_field( $ref['duration'] ?? '' ),
+	);
+}
+
+function sanitize_external_url( $url ): string {
+	$url = esc_url_raw( trim( (string) $url ), array( 'http', 'https' ) );
+	return $url && wp_http_validate_url( $url ) ? set_url_scheme( $url ) : '';
+}
+
+function title_from_url( string $url ): string {
+	$path  = (string) wp_parse_url( $url, PHP_URL_PATH );
+	$title = $path ? basename( $path ) : __( 'External audio', 'jt-practice-player' );
+	$title = preg_replace( '/\.[a-z0-9]{2,5}$/i', '', $title );
+	$title = str_replace( array( '-', '_' ), ' ', rawurldecode( $title ) );
+	$title = trim( $title );
+
+	return $title ? $title : __( 'External audio', 'jt-practice-player' );
 }
 
 function player_style_from_attributes( array $attributes ): string {

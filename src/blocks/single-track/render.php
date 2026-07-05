@@ -1,13 +1,26 @@
 <?php
 namespace JTPP;
 
-$jtpp_tracks = resolve_tracks( array( array( 'id' => $attributes['id'] ?? 0, 'customTitle' => $attributes['customTitle'] ?? '' ) ) );
+$jtpp_tracks = resolve_tracks(
+	array(
+		array(
+			'id'          => $attributes['id'] ?? 0,
+			'customTitle' => $attributes['customTitle'] ?? '',
+			'url'         => $attributes['externalUrl'] ?? '',
+			'title'       => $attributes['externalTitle'] ?? '',
+			'artist'      => $attributes['externalArtist'] ?? '',
+			'album'       => $attributes['externalAlbum'] ?? '',
+			'artwork'     => $attributes['externalArtwork'] ?? '',
+			'duration'    => $attributes['externalDuration'] ?? '',
+		),
+	)
+);
 $jtpp_inner  = render_player(
 	$jtpp_tracks,
 	array(
-		'playlist' => false,
-		'skip'     => ! empty( $attributes['showSkipButtons'] ),
-		'speed'    => ! empty( $attributes['showSpeedControl'] ),
+		'playlist'   => false,
+		'skip'       => ! empty( $attributes['showSkipButtons'] ),
+		'speed'      => ! empty( $attributes['showSpeedControl'] ),
 		'fullscreen' => $attributes['showFullscreenControl'] ?? true,
 	)
 );

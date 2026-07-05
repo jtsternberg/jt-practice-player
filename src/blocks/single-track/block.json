@@ -10,6 +10,12 @@
 	"attributes": {
 		"id": { "type": "number", "default": 0 },
 		"customTitle": { "type": "string", "default": "" },
+		"externalUrl": { "type": "string", "default": "" },
+		"externalTitle": { "type": "string", "default": "" },
+		"externalArtist": { "type": "string", "default": "" },
+		"externalAlbum": { "type": "string", "default": "" },
+		"externalArtwork": { "type": "string", "default": "" },
+		"externalDuration": { "type": "string", "default": "" },
 		"showSkipButtons": { "type": "boolean", "default": true },
 		"showSpeedControl": { "type": "boolean", "default": true },
 		"showFullscreenControl": { "type": "boolean", "default": true },

@@ -37,6 +37,13 @@ describe( 'persistence', () => {
 		saveTrackState( 123, state, s, 1000 * DAY );
 		expect( loadTrackState( 123, s ) ).toMatchObject( state );
 	} );
+	it( 'round-trips external URL track state', () => {
+		const s = memoryStorage();
+		saveTrackState( 'url:1234abcd5678ef90', state, s, 1000 * DAY );
+		expect( loadTrackState( 'url:1234abcd5678ef90', s ) ).toMatchObject(
+			state
+		);
+	} );
 	it( 'returns null for unknown tracks', () => {
 		expect( loadTrackState( 999, memoryStorage() ) ).toBeNull();
 	} );
@@ -51,6 +58,12 @@ describe( 'persistence', () => {
 		saveTrackState( 2, state, s, 91 * DAY );
 		expect( loadTrackState( 1, s ) ).toBeNull();
 		expect( loadTrackState( 2, s ) ).toMatchObject( state );
+	} );
+	it( 'prunes old external URL track state', () => {
+		const s = memoryStorage();
+		saveTrackState( 'url:1234abcd5678ef90', state, s, 0 );
+		saveTrackState( 2, state, s, 91 * DAY );
+		expect( loadTrackState( 'url:1234abcd5678ef90', s ) ).toBeNull();
 	} );
 	it( 'does not prune queue or volume keys while pruning track state', () => {
 		const s = memoryStorage();

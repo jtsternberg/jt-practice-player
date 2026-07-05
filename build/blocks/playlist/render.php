@@ -5,9 +5,9 @@ $jtpp_tracks = resolve_tracks( $attributes['tracks'] ?? array() );
 $jtpp_inner  = render_player(
 	$jtpp_tracks,
 	array(
-		'playlist' => count( $jtpp_tracks ) > 1,
-		'skip'     => ! empty( $attributes['showSkipButtons'] ),
-		'speed'    => ! empty( $attributes['showSpeedControl'] ),
+		'playlist'   => count( $jtpp_tracks ) > 1,
+		'skip'       => ! empty( $attributes['showSkipButtons'] ),
+		'speed'      => ! empty( $attributes['showSpeedControl'] ),
 		'fullscreen' => $attributes['showFullscreenControl'] ?? true,
 	)
 );

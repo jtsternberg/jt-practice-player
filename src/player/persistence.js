@@ -115,7 +115,7 @@ function prune( storage, now ) {
 	const stale = [];
 	for ( let i = 0; i < storage.length; i++ ) {
 		const key = storage.key( i );
-		if ( ! key || ! /^jtpp:\d+$/.test( key ) ) {
+		if ( ! key || ! /^jtpp:(?:\d+|url:[a-f0-9]{16})$/.test( key ) ) {
 			continue;
 		}
 		try {

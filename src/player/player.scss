@@ -766,16 +766,32 @@
 	font-style: italic;
 }
 
-// Inline per-track editor shown below the preview when a track is selected.
-.jtpp-editor-inline-editor {
-	margin-top: 12px;
+// Quick-edit drawer: opens inline directly under the selected track row so
+// editing stays in context even in a long list. Slides down on open.
+.jtpp-editor-drawer {
+	overflow: hidden;
+	margin: 2px 0;
 	padding: 14px 16px;
 	border: 1px solid var(--jtpp-line, color-mix(in srgb, currentcolor 16%, transparent));
-	border-radius: 8px;
-	background: color-mix(in srgb, currentcolor 3%, transparent);
+	border-left: 3px solid var(--jtpp-accent, #3858e9);
+	border-radius: 6px;
+	background: color-mix(in srgb, currentcolor 4%, transparent);
+	animation: jtpp-drawer-in 160ms ease;
 }
 
-.jtpp-editor-inline-editor__head {
+@keyframes jtpp-drawer-in {
+	from {
+		opacity: 0;
+		transform: translateY(-6px);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.jtpp-editor-drawer__head {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -783,7 +799,7 @@
 	font-size: 13px;
 }
 
-.jtpp-editor-inline-editor .components-base-control {
+.jtpp-editor-drawer .components-base-control {
 	margin-bottom: 10px;
 }
 

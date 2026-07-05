@@ -5,6 +5,7 @@ import {
 	useEffect,
 	useCallback,
 	memo,
+	Fragment,
 } from '@wordpress/element';
 import { useSelect } from '@wordpress/data';
 import {
@@ -455,9 +456,6 @@ export default function Edit( { attributes, setAttributes } ) {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [ dragging ] );
 
-	const selectedTrack =
-		selectedIndex !== null ? tracks[ selectedIndex ] : undefined;
-
 	return (
 		<div
 			{ ...useBlockProps( { className: 'jtpp-editor' } ) }
@@ -562,50 +560,62 @@ export default function Edit( { attributes, setAttributes } ) {
 						<div className="jtpp-shell">
 							<ol className="jtpp-tracklist">
 								{ tracks.map( ( track, i ) => (
-									<PreviewRow
+									<Fragment
 										key={ `${ track.id || 'url' }-${ i }` }
-										track={ track }
-										index={ i }
-										isSelected={ selectedIndex === i }
-										onSelect={ selectTrack }
-										drag={ drag }
-										startDrag={ startDrag }
-									/>
+									>
+										<PreviewRow
+											track={ track }
+											index={ i }
+											isSelected={ selectedIndex === i }
+											onSelect={ selectTrack }
+											drag={ drag }
+											startDrag={ startDrag }
+										/>
+										{ selectedIndex === i && (
+											<li className="jtpp-editor-drawer">
+												<div className="jtpp-editor-drawer__head">
+													<strong>
+														{ __(
+															'Edit track',
+															'jt-practice-player'
+														) }
+														{ ` ${ i + 1 }` }
+													</strong>
+													<Button
+														variant="tertiary"
+														onClick={ () =>
+															setSelectedIndex(
+																null
+															)
+														}
+													>
+														{ __(
+															'Done',
+															'jt-practice-player'
+														) }
+													</Button>
+												</div>
+												<TrackSettings
+													track={ track }
+													index={ i }
+													count={ tracks.length }
+													setField={ setField }
+													onRemove={ () =>
+														remove( i )
+													}
+													onMove={ ( dir ) => {
+														const to = i + dir;
+														move( i, to );
+														setSelectedIndex( to );
+													} }
+												/>
+											</li>
+										) }
+									</Fragment>
 								) ) }
 							</ol>
 						</div>
 					</div>
-					{ selectedTrack && (
-						<div className="jtpp-editor-inline-editor">
-							<div className="jtpp-editor-inline-editor__head">
-								<strong>
-									{ __(
-										'Edit track',
-										'jt-practice-player'
-									) }
-									{ ` ${ selectedIndex + 1 }` }
-								</strong>
-								<Button
-									variant="tertiary"
-									onClick={ () => setSelectedIndex( null ) }
-								>
-									{ __( 'Done', 'jt-practice-player' ) }
-								</Button>
-							</div>
-							<TrackSettings
-								track={ selectedTrack }
-								index={ selectedIndex }
-								count={ tracks.length }
-								setField={ setField }
-								onRemove={ () => remove( selectedIndex ) }
-								onMove={ ( dir ) => {
-									const to = selectedIndex + dir;
-									move( selectedIndex, to );
-									setSelectedIndex( to );
-								} }
-							/>
-						</div>
-					) }
 					{ drag && (
 						<div
 							className="jtpp-editor-ghost"

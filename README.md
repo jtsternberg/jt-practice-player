@@ -134,35 +134,6 @@ npm run lint:css
 npm run test:unit
 ```
 
-## YouTube Description
-
-**Title idea:** WordPress Practice Player Plugin: Waveform Loops, Setlists, and Speed Control
-
-**Description:**
-
-JT Practice Player is a WordPress block plugin for band-practice audio pages. It adds a waveform player with drag-to-select A-B loops, playlist rotation, local track order, playback speed, fullscreen mode, album metadata, downloads, and keyboard/media-key controls.
-
-In this demo, I show how to add a practice playlist from the WordPress Media Library, reorder tracks, customize the player colors, select a loop region on the waveform, slow the track down, and use the player as a rehearsal tool for a full setlist.
-
-Useful for bands, worship teams, music teachers, rehearsal pages, and anyone who needs more than a basic embedded audio player.
-
-**Demo outline:**
-
-1. Add the Practice Playlist block.
-2. Select audio files from the Media Library.
-3. Show track metadata, album art, and downloads.
-4. Reorder tracks in the editor.
-5. Publish and play the playlist.
-6. Drag on the waveform to create an A-B loop.
-7. Resize, move, zoom, and clear the loop.
-8. Change playback speed.
-9. Use checklist rotation for a focused practice queue.
-10. Show fullscreen mode and keyboard/media-key controls.
-
-**Short version:**
-
-A WordPress block plugin that turns Media Library audio files into a rehearsal-friendly practice player with waveform looping, setlist controls, playback speed, downloads, fullscreen mode, and local per-user preferences.
-
 ## License
 
 GPL-2.0-or-later.

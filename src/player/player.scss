@@ -31,26 +31,6 @@
 	color: CanvasText;
 }
 
-body.jtpp-focus-mode-open {
-	overflow: hidden;
-}
-
-.jtpp.is-focus-mode {
-	position: fixed;
-	z-index: 99999;
-	inset: 0;
-	width: 100vw;
-	height: 100dvh;
-	padding:
-		max(12px, env(safe-area-inset-top))
-		max(12px, env(safe-area-inset-right))
-		max(12px, env(safe-area-inset-bottom))
-		max(12px, env(safe-area-inset-left));
-	overflow: auto;
-	background: Canvas;
-	color: CanvasText;
-}
-
 .jtpp-shell {
 	position: relative;
 	display: grid;
@@ -63,7 +43,6 @@ body.jtpp-focus-mode-open {
 }
 
 .jtpp:fullscreen .jtpp-shell,
-.jtpp.is-focus-mode .jtpp-shell,
 .jtpp.is-fullscreen .jtpp-shell {
 	width: min(100%, 1100px);
 	min-height: calc(100vh - 48px);

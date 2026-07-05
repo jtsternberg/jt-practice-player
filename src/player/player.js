@@ -114,7 +114,6 @@ export class PracticePlayer {
 		this.loopFocusZoomPxPerSec = 0;
 		this.saveTimer = null;
 		this.stickyFrame = null;
-		this.focusModeActive = false;
 		this.restoring = false;
 		this.checkedIds = loadQueue( this.storageTrackIds );
 		this.volume = loadVolume();
@@ -280,12 +279,6 @@ export class PracticePlayer {
 		document.addEventListener( 'fullscreenchange', () =>
 			this.reflectFullscreen()
 		);
-		document.addEventListener( 'keydown', ( event ) => {
-			if ( event.key === 'Escape' && this.focusModeActive ) {
-				event.preventDefault();
-				this.exitFocusMode();
-			}
-		} );
 	}
 
 	bindStickyPlayer() {
@@ -320,7 +313,6 @@ export class PracticePlayer {
 		const panelHeight = this.panelEl.offsetHeight;
 		const viewportHeight = window.innerHeight;
 		const shouldStick =
-			! this.isFullscreenActive() &&
 			this.trackRows.length > 4 &&
 			shellRect.top < viewportHeight - panelHeight - bottomGap &&
 			listRect.bottom > viewportHeight - bottomGap;
@@ -784,36 +776,20 @@ export class PracticePlayer {
 		this.scheduleSave();
 	}
 
-	async toggleFullscreen() {
-		if ( ! this.fullscreenButton ) {
-			return;
-		}
-		if ( this.focusModeActive ) {
-			this.exitFocusMode();
+	toggleFullscreen() {
+		if ( ! this.fullscreenButton || ! document.fullscreenEnabled ) {
 			return;
 		}
 		if ( document.fullscreenElement === this.rootEl ) {
-			await document.exitFullscreen?.();
+			document.exitFullscreen?.();
 			return;
 		}
-		if ( ! document.fullscreenEnabled || ! this.rootEl.requestFullscreen ) {
-			this.enterFocusMode();
-			return;
-		}
-		try {
-			await this.rootEl.requestFullscreen();
-			this.reflectFullscreen();
-		} catch {
-			this.enterFocusMode();
-		}
+		this.rootEl.requestFullscreen?.();
 	}
 
 	reflectFullscreen() {
-		const active = this.isFullscreenActive();
-		this.rootEl.classList.toggle(
-			'is-fullscreen',
-			document.fullscreenElement === this.rootEl
-		);
+		const active = document.fullscreenElement === this.rootEl;
+		this.rootEl.classList.toggle( 'is-fullscreen', active );
 		this.fullscreenButton?.setAttribute(
 			'aria-pressed',
 			active ? 'true' : 'false'
@@ -823,27 +799,6 @@ export class PracticePlayer {
 			active ? 'Exit fullscreen' : 'Enter fullscreen'
 		);
 		this.requestStickyUpdate();
-	}
-
-	enterFocusMode() {
-		this.focusModeActive = true;
-		this.rootEl.classList.add( 'is-focus-mode' );
-		document.body.classList.add( 'jtpp-focus-mode-open' );
-		this.reflectFullscreen();
-		this.rootEl.scrollIntoView( { block: 'start' } );
-	}
-
-	exitFocusMode() {
-		this.focusModeActive = false;
-		this.rootEl.classList.remove( 'is-focus-mode' );
-		document.body.classList.remove( 'jtpp-focus-mode-open' );
-		this.reflectFullscreen();
-	}
-
-	isFullscreenActive() {
-		return (
-			this.focusModeActive || document.fullscreenElement === this.rootEl
-		);
 	}
 
 	clearLoopRegion() {

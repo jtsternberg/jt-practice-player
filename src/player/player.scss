@@ -31,6 +31,26 @@
 	color: CanvasText;
 }
 
+body.jtpp-focus-mode-open {
+	overflow: hidden;
+}
+
+.jtpp.is-focus-mode {
+	position: fixed;
+	z-index: 99999;
+	inset: 0;
+	width: 100vw;
+	height: 100dvh;
+	padding:
+		max(12px, env(safe-area-inset-top))
+		max(12px, env(safe-area-inset-right))
+		max(12px, env(safe-area-inset-bottom))
+		max(12px, env(safe-area-inset-left));
+	overflow: auto;
+	background: Canvas;
+	color: CanvasText;
+}
+
 .jtpp-shell {
 	position: relative;
 	display: grid;
@@ -43,6 +63,7 @@
 }
 
 .jtpp:fullscreen .jtpp-shell,
+.jtpp.is-focus-mode .jtpp-shell,
 .jtpp.is-fullscreen .jtpp-shell {
 	width: min(100%, 1100px);
 	min-height: calc(100vh - 48px);
@@ -130,6 +151,15 @@
 	cursor: pointer;
 }
 
+.jtpp-editor-preview .jtpp-download {
+	pointer-events: none;
+}
+
+.jtpp-editor-preview-row .jtpp-drag-handle {
+	cursor: grab;
+	touch-action: none;
+}
+
 .jtpp-drag-handle:hover,
 .jtpp-drag-handle:focus-visible,
 .jtpp-download:hover,
@@ -137,6 +167,10 @@
 	color: var(--jtpp-accent);
 	background: var(--jtpp-active) !important;
 	outline: 2px solid transparent;
+}
+
+.jtpp-editor-preview-row .jtpp-drag-handle:active {
+	cursor: grabbing;
 }
 
 .jtpp-track-row:hover .jtpp-drag-handle,
@@ -679,13 +713,6 @@
 	margin-bottom: 12px;
 }
 
-// Playlist editor: front-end-styled preview list. Reuses .jtpp / .jtpp-shell /
-// .jtpp-track-row so it mirrors the front end; rows here are selectable and
-// draggable, and decorative controls (queue check, download) are inert.
-.jtpp-editor-preview .jtpp-download {
-	pointer-events: none;
-}
-
 // Decorative queue indicator mirroring the front-end's filled circle (the real
 // "include in rotation" control is a runtime concern, not an edit-time one).
 .jtpp-editor-preview .jtpp-editor-queue {
@@ -709,15 +736,6 @@
 .jtpp-editor-preview-row {
 	position: relative;
 	cursor: pointer;
-}
-
-.jtpp-editor-preview-row .jtpp-drag-handle {
-	cursor: grab;
-	touch-action: none;
-}
-
-.jtpp-editor-preview-row .jtpp-drag-handle:active {
-	cursor: grabbing;
 }
 
 .jtpp-editor-preview .jtpp-editor-grip svg {
@@ -780,6 +798,7 @@
 }
 
 @keyframes jtpp-drawer-in {
+
 	from {
 		opacity: 0;
 		transform: translateY(-6px);

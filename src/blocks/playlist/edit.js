@@ -1,5 +1,11 @@
 import { __ } from '@wordpress/i18n';
-import { useState, useRef, useEffect } from '@wordpress/element';
+import {
+	useState,
+	useRef,
+	useEffect,
+	useCallback,
+	memo,
+} from '@wordpress/element';
 import { useSelect } from '@wordpress/data';
 import {
 	useBlockProps,
@@ -45,7 +51,9 @@ function urlLooksInvalid( value ) {
 	}
 }
 
-function TrackRow( {
+// Memoized so typing in one row doesn't re-render (and re-run useSelect for)
+// every other row. Relies on the parent passing stable callbacks.
+const TrackRow = memo( function TrackRow( {
 	track,
 	index,
 	count,
@@ -244,7 +252,7 @@ function TrackRow( {
 			</div>
 		</Flex>
 	);
-}
+} );
 
 export default function Edit( { attributes, setAttributes } ) {
 	const {
@@ -263,41 +271,68 @@ export default function Edit( { attributes, setAttributes } ) {
 	// { from, title, x, y, gap } — gap is the insertion index (0..count).
 	const [ drag, setDrag ] = useState( null );
 
-	const addMedia = ( media ) => {
-		const additions = ( Array.isArray( media ) ? media : [ media ] ).map(
-			( m ) => ( {
-				id: m.id,
-				customTitle: '',
-			} )
-		);
-		setAttributes( { tracks: [ ...tracks, ...additions ] } );
-	};
-	const addExternal = () =>
-		setAttributes( { tracks: [ ...tracks, { ...NEW_EXTERNAL_TRACK } ] } );
-	const update = ( i, track ) =>
-		setAttributes( {
-			tracks: tracks.map( ( t, n ) => ( n === i ? track : t ) ),
-		} );
-	const move = ( from, to ) => {
-		if (
-			from === to ||
-			from < 0 ||
-			to < 0 ||
-			from >= tracks.length ||
-			to >= tracks.length
-		) {
-			return;
-		}
-		const next = [ ...tracks ];
-		next.splice( to, 0, next.splice( from, 1 )[ 0 ] );
-		setAttributes( { tracks: next } );
-	};
-	const remove = ( i ) =>
-		setAttributes( { tracks: tracks.filter( ( _, n ) => n !== i ) } );
+	// Hold the latest tracks in a ref so the mutating callbacks below can stay
+	// referentially stable (empty deps). Stable callbacks + a memoized TrackRow
+	// mean a keystroke only re-renders the row being edited, not all of them.
+	const tracksRef = useRef( tracks );
+	tracksRef.current = tracks;
+
+	const addMedia = useCallback(
+		( media ) => {
+			const additions = (
+				Array.isArray( media ) ? media : [ media ]
+			).map( ( m ) => ( { id: m.id, customTitle: '' } ) );
+			setAttributes( {
+				tracks: [ ...tracksRef.current, ...additions ],
+			} );
+		},
+		[ setAttributes ]
+	);
+	const addExternal = useCallback(
+		() =>
+			setAttributes( {
+				tracks: [ ...tracksRef.current, { ...NEW_EXTERNAL_TRACK } ],
+			} ),
+		[ setAttributes ]
+	);
+	const update = useCallback(
+		( i, track ) =>
+			setAttributes( {
+				tracks: tracksRef.current.map( ( t, n ) =>
+					n === i ? track : t
+				),
+			} ),
+		[ setAttributes ]
+	);
+	const move = useCallback(
+		( from, to ) => {
+			const current = tracksRef.current;
+			if (
+				from === to ||
+				from < 0 ||
+				to < 0 ||
+				from >= current.length ||
+				to >= current.length
+			) {
+				return;
+			}
+			const next = [ ...current ];
+			next.splice( to, 0, next.splice( from, 1 )[ 0 ] );
+			setAttributes( { tracks: next } );
+		},
+		[ setAttributes ]
+	);
+	const remove = useCallback(
+		( i ) =>
+			setAttributes( {
+				tracks: tracksRef.current.filter( ( _, n ) => n !== i ),
+			} ),
+		[ setAttributes ]
+	);
 
 	// Which gap the pointer currently sits in, by comparing its Y against each
 	// row's midpoint. Scoped to this block's rows only.
-	const gapAt = ( clientY ) => {
+	const gapAt = useCallback( ( clientY ) => {
 		const rows = containerRef.current
 			? [
 					...containerRef.current.querySelectorAll(
@@ -312,9 +347,9 @@ export default function Edit( { attributes, setAttributes } ) {
 			}
 		}
 		return rows.length;
-	};
+	}, [] );
 
-	const startDrag = ( event, index, title ) => {
+	const startDrag = useCallback( ( event, index, title ) => {
 		if ( event.button && event.button !== 0 ) {
 			return;
 		}
@@ -326,7 +361,7 @@ export default function Edit( { attributes, setAttributes } ) {
 			y: event.clientY,
 			gap: index,
 		} );
-	};
+	}, [] );
 
 	// While a drag is live, track the pointer on the document (this block's
 	// document — the editor iframe) so movement is followed even once the

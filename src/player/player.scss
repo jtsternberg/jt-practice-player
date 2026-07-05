@@ -679,6 +679,114 @@
 	margin-bottom: 12px;
 }
 
+// Playlist editor: front-end-styled preview list. Reuses .jtpp / .jtpp-shell /
+// .jtpp-track-row so it mirrors the front end; rows here are selectable and
+// draggable, and decorative controls (queue check, download) are inert.
+.jtpp-editor-preview .jtpp-download {
+	pointer-events: none;
+}
+
+// Decorative queue indicator mirroring the front-end's filled circle (the real
+// "include in rotation" control is a runtime concern, not an edit-time one).
+.jtpp-editor-preview .jtpp-editor-queue {
+	position: relative;
+	width: 18px;
+	height: 18px;
+	border-radius: 999px;
+	border: 1.5px solid var(--jtpp-accent, #2f7d62);
+	background: color-mix(in srgb, var(--jtpp-accent, #2f7d62) 16%, transparent);
+	pointer-events: none;
+}
+
+.jtpp-editor-preview .jtpp-editor-queue::after {
+	content: "";
+	position: absolute;
+	inset: 4px;
+	border-radius: 999px;
+	background: var(--jtpp-accent, #2f7d62);
+}
+
+.jtpp-editor-preview-row {
+	position: relative;
+	cursor: pointer;
+}
+
+.jtpp-editor-preview-row .jtpp-drag-handle {
+	cursor: grab;
+	touch-action: none;
+}
+
+.jtpp-editor-preview-row .jtpp-drag-handle:active {
+	cursor: grabbing;
+}
+
+.jtpp-editor-preview .jtpp-editor-grip svg {
+	width: 20px;
+	height: 20px;
+}
+
+.jtpp-editor-preview-row.is-dragging {
+	opacity: 0.4;
+}
+
+// Insertion indicator between preview rows (mirrors the card version).
+.jtpp-editor-preview-row.is-drop-above::before,
+.jtpp-editor-preview-row.is-drop-below::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	height: 3px;
+	border-radius: 999px;
+	background: var(--wp-admin-theme-color, #3858e9);
+	box-shadow: 0 0 0 1px color-mix(in srgb, #fff 70%, transparent);
+	pointer-events: none;
+	z-index: 2;
+}
+
+.jtpp-editor-preview-row.is-drop-above::before {
+	top: -1px;
+}
+
+.jtpp-editor-preview-row.is-drop-below::after {
+	bottom: -1px;
+}
+
+// Sidebar: selected-track actions + hints.
+.jtpp-editor-track-actions {
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 12px;
+}
+
+.jtpp-editor-hint {
+	margin: 8px 0 0;
+	color: color-mix(in srgb, currentcolor 60%, transparent);
+	font-size: 12px;
+	font-style: italic;
+}
+
+// Inline per-track editor shown below the preview when a track is selected.
+.jtpp-editor-inline-editor {
+	margin-top: 12px;
+	padding: 14px 16px;
+	border: 1px solid var(--jtpp-line, color-mix(in srgb, currentcolor 16%, transparent));
+	border-radius: 8px;
+	background: color-mix(in srgb, currentcolor 3%, transparent);
+}
+
+.jtpp-editor-inline-editor__head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 10px;
+	font-size: 13px;
+}
+
+.jtpp-editor-inline-editor .components-base-control {
+	margin-bottom: 10px;
+}
+
 // Right-hand controls as a full-height column bled to the card's edge, so
 // the divider spans the whole row rather than floating beside the buttons.
 .jtpp-editor-track__controls {

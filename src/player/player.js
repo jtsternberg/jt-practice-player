@@ -34,6 +34,10 @@ const ZOOM_STEP = 1.35;
 const REPEAT_OFF = 'off';
 const REPEAT_PLAYLIST = 'playlist';
 const REPEAT_TRACK = 'track';
+const PEAK_CHANNELS = 2;
+const PEAK_SAMPLES = 8000;
+const PEAK_CACHE_LIMIT = 12;
+const PEAK_CACHE = new Map();
 const PLAY_ICON =
 	'<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="7 5 19 12 7 19 7 5"></polygon></svg>';
 const PAUSE_ICON =
@@ -130,6 +134,10 @@ export class PracticePlayer {
 		this.loopFocusZoomPxPerSec = 0;
 		this.saveTimer = null;
 		this.stickyFrame = null;
+		this.peakAbortController = null;
+		this.nativeAudio = null;
+		this.waveformReady = false;
+		this.trackStateRestored = false;
 		this.restoring = false;
 		this.checkedIds = loadQueue( this.storageTrackIds );
 		this.volume = loadVolume();
@@ -495,6 +503,8 @@ export class PracticePlayer {
 		this.region = null;
 		this.zoomPxPerSec = 0;
 		this.loopFocusZoomPxPerSec = 0;
+		this.waveformReady = false;
+		this.trackStateRestored = false;
 		this.setFallbackMode( false );
 		this.updateActiveTrack();
 		this.createWaveSurfer( this.tracks[ index ], autoplay );
@@ -502,9 +512,12 @@ export class PracticePlayer {
 
 	createWaveSurfer( track, autoplay ) {
 		this.regions = RegionsPlugin.create();
+		this.nativeAudio = document.createElement( 'audio' );
+		this.nativeAudio.preload = 'auto';
+		this.nativeAudio.src = track.url;
 		this.waveSurfer = WaveSurfer.create( {
 			container: this.waveformEl,
-			url: track.url,
+			media: this.nativeAudio,
 			height: WAVEFORM_HEIGHT,
 			normalize: true,
 			waveColor: WAVE_COLOR,
@@ -514,6 +527,7 @@ export class PracticePlayer {
 			plugins: [ this.regions ],
 		} );
 		this.waveSurfer.setVolume( this.volume );
+		this.setWaveformLoading( true );
 		this.regions.enableDragSelection( {
 			color: REGION_COLOR,
 			drag: true,
@@ -521,18 +535,13 @@ export class PracticePlayer {
 			minLength: 0.2,
 		} );
 
-		this.bindWaveSurferEvents( autoplay );
+		this.bindWaveSurferEvents();
+		this.bindNativeAudioEvents( autoplay );
+		this.loadWaveformPeaks( track );
+		this.nativeAudio.load();
 	}
 
-	bindWaveSurferEvents( autoplay ) {
-		this.waveSurfer.on( 'ready', () => {
-			this.restoreTrackState();
-			this.updateTimes();
-			this.requestStickyUpdate();
-			if ( autoplay ) {
-				this.play();
-			}
-		} );
+	bindWaveSurferEvents() {
 		this.waveSurfer.on( 'timeupdate', ( time ) =>
 			this.onTimeUpdate( time )
 		);
@@ -553,6 +562,20 @@ export class PracticePlayer {
 		this.regions.on( 'region-double-clicked', ( region, event ) => {
 			event.preventDefault();
 			region.remove();
+		} );
+	}
+
+	bindNativeAudioEvents( autoplay ) {
+		const restoreAndPlay = () => {
+			this.restoreTrackStateOnce();
+			this.updateTimes();
+			this.requestStickyUpdate();
+			if ( autoplay ) {
+				this.play();
+			}
+		};
+		this.nativeAudio.addEventListener( 'loadedmetadata', restoreAndPlay, {
+			once: true,
 		} );
 	}
 
@@ -728,6 +751,17 @@ export class PracticePlayer {
 		this.requestStickyUpdate();
 	}
 
+	restoreTrackStateOnce() {
+		if (
+			this.trackStateRestored ||
+			( this.nativeAudio && this.nativeAudio.readyState < 1 )
+		) {
+			return;
+		}
+		this.trackStateRestored = true;
+		this.restoreTrackState();
+	}
+
 	onTimeUpdate( time ) {
 		const target = loopJumpTarget( time, this.loop );
 		if ( target !== null ) {
@@ -786,7 +820,10 @@ export class PracticePlayer {
 	}
 
 	play() {
-		this.waveSurfer?.play();
+		this.waveSurfer?.play()?.catch( () => {
+			// Browsers can reject play() when the click did not count as a
+			// user gesture, especially in automation or strict autoplay modes.
+		} );
 	}
 
 	pause() {
@@ -855,7 +892,12 @@ export class PracticePlayer {
 	}
 
 	focusLoopZoom() {
-		if ( ! this.loop || ! this.waveSurfer || ! this.waveformEl ) {
+		if (
+			! this.loop ||
+			! this.waveSurfer ||
+			! this.waveformEl ||
+			! this.waveformReady
+		) {
 			return;
 		}
 		const duration = this.waveSurfer.getDuration();
@@ -884,7 +926,7 @@ export class PracticePlayer {
 	}
 
 	stepZoom( direction ) {
-		if ( ! this.waveSurfer ) {
+		if ( ! this.waveSurfer || ! this.waveformReady ) {
 			return;
 		}
 		const duration = this.waveSurfer.getDuration();
@@ -901,7 +943,7 @@ export class PracticePlayer {
 	}
 
 	applyZoom( pxPerSec, scrollTime = null ) {
-		if ( ! this.waveSurfer ) {
+		if ( ! this.waveSurfer || ! this.waveformReady ) {
 			return;
 		}
 		this.zoomPxPerSec = pxPerSec;
@@ -932,7 +974,7 @@ export class PracticePlayer {
 	}
 
 	resetZoom() {
-		if ( ! this.waveSurfer ) {
+		if ( ! this.waveSurfer || ! this.waveformReady ) {
 			return;
 		}
 		this.zoomPxPerSec = 0;
@@ -1187,6 +1229,64 @@ export class PracticePlayer {
 		}
 	}
 
+	setWaveformLoading( loading ) {
+		if ( ! this.waveformEl ) {
+			return;
+		}
+		this.waveformEl.classList.toggle( 'is-loading', loading );
+		this.waveformEl.classList.remove( 'is-unavailable' );
+		this.waveformEl.dataset.status = loading ? 'Loading waveform' : '';
+	}
+
+	setWaveformUnavailable() {
+		if ( ! this.waveformEl ) {
+			return;
+		}
+		this.waveformEl.classList.remove( 'is-loading' );
+		this.waveformEl.classList.add( 'is-unavailable' );
+		this.waveformEl.dataset.status = 'Waveform unavailable';
+	}
+
+	async loadWaveformPeaks( track ) {
+		const cached = PEAK_CACHE.get( track.url );
+		if ( cached ) {
+			this.applyWaveformPeaks( track, cached );
+			return;
+		}
+		const controller = new AbortController();
+		this.peakAbortController = controller;
+		try {
+			const peaks = await fetchTrackPeaks( track.url, controller.signal );
+			cacheTrackPeaks( track.url, peaks );
+			this.applyWaveformPeaks( track, peaks );
+		} catch ( error ) {
+			if ( error?.name === 'AbortError' ) {
+				return;
+			}
+			if ( this.currentTrack()?.url === track.url ) {
+				this.setWaveformUnavailable();
+			}
+		}
+	}
+
+	applyWaveformPeaks( track, peaks ) {
+		if ( this.currentTrack()?.url !== track.url || ! this.waveSurfer ) {
+			return;
+		}
+		this.waveformReady = true;
+		this.waveSurfer.setOptions( {
+			peaks: peaks.data,
+			duration: peaks.duration,
+		} );
+		this.setWaveformLoading( false );
+		this.restoreTrackStateOnce();
+		if ( this.loop ) {
+			this.focusLoopZoom();
+		}
+		this.updateTimes();
+		this.requestStickyUpdate();
+	}
+
 	setFallbackMode( fallback ) {
 		if ( this.waveformEl ) {
 			this.waveformEl.hidden = fallback;
@@ -1204,11 +1304,80 @@ export class PracticePlayer {
 	}
 
 	destroyWaveSurfer() {
+		this.peakAbortController?.abort();
+		this.peakAbortController = null;
 		if ( this.waveSurfer ) {
 			this.waveSurfer.destroy();
 		}
+		if ( this.nativeAudio ) {
+			this.nativeAudio.pause();
+			this.nativeAudio.removeAttribute( 'src' );
+			this.nativeAudio.load();
+			this.nativeAudio = null;
+		}
 		if ( this.waveformEl ) {
 			this.waveformEl.textContent = '';
+			this.waveformEl.classList.remove( 'is-loading', 'is-unavailable' );
+			this.waveformEl.dataset.status = '';
 		}
+	}
+}
+
+async function fetchTrackPeaks( url, signal ) {
+	const response = await fetch( url, { signal } );
+	if ( response.status >= 400 ) {
+		throw new Error( `Failed to fetch ${ url }: ${ response.status }` );
+	}
+	const arrayBuffer = await response.arrayBuffer();
+	if ( signal.aborted ) {
+		throw new DOMException( 'Aborted', 'AbortError' );
+	}
+	const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+	if ( ! AudioContextClass ) {
+		throw new Error( 'AudioContext is not available' );
+	}
+	const audioContext = new AudioContextClass( { sampleRate: 8000 } );
+	try {
+		const decoded = await audioContext.decodeAudioData( arrayBuffer );
+		if ( signal.aborted ) {
+			throw new DOMException( 'Aborted', 'AbortError' );
+		}
+		return {
+			data: extractPeaks( decoded ),
+			duration: decoded.duration,
+		};
+	} finally {
+		audioContext.close();
+	}
+}
+
+function extractPeaks( audioBuffer ) {
+	const channels = Math.min( audioBuffer.numberOfChannels, PEAK_CHANNELS );
+	const length = Math.min( PEAK_SAMPLES, audioBuffer.length );
+	return Array.from( { length: channels }, ( _value, channelIndex ) => {
+		const data = audioBuffer.getChannelData( channelIndex );
+		const step = data.length / length;
+		return Array.from( { length }, ( _sample, index ) => {
+			const start = Math.floor( index * step );
+			const end = Math.min(
+				data.length,
+				Math.ceil( ( index + 1 ) * step )
+			);
+			let peak = 0;
+			for ( let i = start; i < end; i++ ) {
+				if ( Math.abs( data[ i ] ) > Math.abs( peak ) ) {
+					peak = data[ i ];
+				}
+			}
+			return peak;
+		} );
+	} );
+}
+
+function cacheTrackPeaks( url, peaks ) {
+	PEAK_CACHE.delete( url );
+	PEAK_CACHE.set( url, peaks );
+	while ( PEAK_CACHE.size > PEAK_CACHE_LIMIT ) {
+		PEAK_CACHE.delete( PEAK_CACHE.keys().next().value );
 	}
 }

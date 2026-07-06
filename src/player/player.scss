@@ -344,12 +344,51 @@
 }
 
 .jtpp-waveform {
+	position: relative;
 	height: 106px;
 	overflow: hidden;
 	border: 1px solid var(--jtpp-line);
 	border-radius: 7px;
 	background: color-mix(in srgb, currentcolor 4%, transparent);
 	touch-action: none;
+}
+
+.jtpp-waveform.is-loading::before {
+	position: absolute;
+	inset: 0;
+	background:
+		linear-gradient(90deg, transparent, color-mix(in srgb, #fff 28%, transparent), transparent),
+		repeating-linear-gradient(90deg, color-mix(in srgb, var(--jtpp-accent) 20%, transparent) 0 3px, transparent 3px 9px);
+	background-size: 38% 100%, auto;
+	content: "";
+	opacity: 0.72;
+	pointer-events: none;
+	transform: translateX(-38%);
+	animation: jtpp-waveform-loading 1.1s linear infinite;
+}
+
+.jtpp-waveform.is-loading::after,
+.jtpp-waveform.is-unavailable::after {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	color: var(--jtpp-muted);
+	font-size: 0.82rem;
+	font-weight: 650;
+	content: attr(data-status);
+	pointer-events: none;
+}
+
+.jtpp-waveform.is-unavailable {
+	background: color-mix(in srgb, currentcolor 3%, transparent);
+}
+
+@keyframes jtpp-waveform-loading {
+
+	to {
+		transform: translateX(100%);
+	}
 }
 
 .jtpp-waveform ::part(cursor) {

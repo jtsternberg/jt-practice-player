@@ -21,9 +21,16 @@ function register() {
 	$dir = plugin_dir_path( __FILE__ );
 	$url = plugin_dir_url( __FILE__ );
 
-	wp_register_script( 'jtpp-view', $url . 'build/view.js', array(), JTPP_VERSION, true );
+	$view_asset = file_exists( $dir . 'build/view.asset.php' )
+		? include $dir . 'build/view.asset.php'
+		: array(
+			'dependencies' => array(),
+			'version'      => JTPP_VERSION,
+		);
+
+	wp_register_script( 'jtpp-view', $url . 'build/view.js', $view_asset['dependencies'], $view_asset['version'], true );
 	if ( file_exists( $dir . 'build/view.css' ) ) {
-		wp_register_style( 'jtpp-player', $url . 'build/view.css', array(), JTPP_VERSION );
+		wp_register_style( 'jtpp-player', $url . 'build/view.css', array(), $view_asset['version'] );
 	}
 
 	foreach ( glob( $dir . 'build/blocks/*/block.json' ) as $block_json ) {

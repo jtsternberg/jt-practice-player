@@ -37,6 +37,7 @@ const REPEAT_TRACK = 'track';
 const PEAK_CHANNELS = 2;
 const PEAK_SAMPLES = 8000;
 const PEAK_CACHE_LIMIT = 12;
+const WAVEFORM_LOADING_DISMISS_DELAY = 1000;
 const PEAK_CACHE = new Map();
 const PLAY_ICON =
 	'<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="7 5 19 12 7 19 7 5"></polygon></svg>';
@@ -137,6 +138,7 @@ export class PracticePlayer {
 		this.peakAbortController = null;
 		this.nativeAudio = null;
 		this.waveformReady = false;
+		this.waveformLoadingTimer = null;
 		this.trackStateRestored = false;
 		this.restoring = false;
 		this.checkedIds = loadQueue( this.storageTrackIds );
@@ -1233,18 +1235,42 @@ export class PracticePlayer {
 		if ( ! this.waveformEl ) {
 			return;
 		}
-		this.waveformEl.classList.toggle( 'is-loading', loading );
+		this.clearWaveformLoadingTimer();
 		this.waveformEl.classList.remove( 'is-unavailable' );
-		this.waveformEl.dataset.status = loading ? 'Loading waveform' : '';
+		if ( loading ) {
+			this.waveformEl.classList.add( 'is-loading' );
+			this.waveformEl.dataset.status = 'Loading waveform';
+			return;
+		}
+		const waveformEl = this.waveformEl;
+		this.waveformLoadingTimer = window.setTimeout( () => {
+			if ( this.waveformEl !== waveformEl ) {
+				return;
+			}
+			this.waveformLoadingTimer = null;
+			waveformEl.classList.remove( 'is-loading' );
+			if ( ! waveformEl.classList.contains( 'is-unavailable' ) ) {
+				waveformEl.dataset.status = '';
+			}
+		}, WAVEFORM_LOADING_DISMISS_DELAY );
 	}
 
 	setWaveformUnavailable() {
 		if ( ! this.waveformEl ) {
 			return;
 		}
+		this.clearWaveformLoadingTimer();
 		this.waveformEl.classList.remove( 'is-loading' );
 		this.waveformEl.classList.add( 'is-unavailable' );
 		this.waveformEl.dataset.status = 'Waveform unavailable';
+	}
+
+	clearWaveformLoadingTimer() {
+		if ( ! this.waveformLoadingTimer ) {
+			return;
+		}
+		window.clearTimeout( this.waveformLoadingTimer );
+		this.waveformLoadingTimer = null;
 	}
 
 	async loadWaveformPeaks( track ) {
@@ -1304,6 +1330,7 @@ export class PracticePlayer {
 	}
 
 	destroyWaveSurfer() {
+		this.clearWaveformLoadingTimer();
 		this.peakAbortController?.abort();
 		this.peakAbortController = null;
 		if ( this.waveSurfer ) {

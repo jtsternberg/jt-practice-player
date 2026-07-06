@@ -128,7 +128,8 @@ function render_player( array $tracks, array $options ): string {
 	wp_enqueue_script( 'jtpp-view' );
 	wp_enqueue_style( 'jtpp-player' );
 
-	$payload = array( 'tracks' => $tracks, 'options' => $options );
+	$payload      = array( 'tracks' => $tracks, 'options' => $options );
+	$loop_name_id = wp_unique_id( 'jtpp-loop-name-' );
 
 	ob_start();
 	?>
@@ -167,20 +168,34 @@ function render_player( array $tracks, array $options ): string {
 		<div class="jtpp-times"><span class="jtpp-time-current">0:00</span><span class="jtpp-time-total">0:00</span></div>
 		<div class="jtpp-loop-tools" hidden>
 			<div class="jtpp-loop-current" hidden>
-				<input type="text" class="jtpp-loop-name" value="" placeholder="<?php esc_attr_e( 'Section name', 'jt-practice-player' ); ?>" aria-label="<?php esc_attr_e( 'Saved section name', 'jt-practice-player' ); ?>" />
-				<button type="button" class="jtpp-loop-save"><?php esc_html_e( 'Save loop', 'jt-practice-player' ); ?></button>
-				<button type="button" class="jtpp-loop-clear"><?php esc_html_e( 'Clear selection', 'jt-practice-player' ); ?></button>
+				<div class="jtpp-loop-summary">
+					<span class="jtpp-loop-label"><?php esc_html_e( 'Loop', 'jt-practice-player' ); ?></span>
+					<span class="jtpp-loop-range">0:00-0:00</span>
+					<button type="button" class="jtpp-loop-clear" aria-label="<?php esc_attr_e( 'Clear current loop', 'jt-practice-player' ); ?>"><?php echo icon( 'close' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button>
+				</div>
+				<button type="button" class="jtpp-loop-save"><?php esc_html_e( 'Save cue', 'jt-practice-player' ); ?></button>
 				<div class="jtpp-zoom-controls" aria-label="<?php esc_attr_e( 'Selection zoom controls', 'jt-practice-player' ); ?>">
 					<button type="button" class="jtpp-zoom-out" aria-label="<?php esc_attr_e( 'Zoom out', 'jt-practice-player' ); ?>">&minus;</button>
 					<button type="button" class="jtpp-zoom-reset" aria-label="<?php esc_attr_e( 'Reset selection zoom', 'jt-practice-player' ); ?>"><?php esc_html_e( 'Fit loop', 'jt-practice-player' ); ?></button>
 					<button type="button" class="jtpp-zoom-in" aria-label="<?php esc_attr_e( 'Zoom in', 'jt-practice-player' ); ?>">+</button>
 				</div>
 			</div>
-			<div class="jtpp-loop-saved" hidden>
-				<select class="jtpp-loop-saved-select" aria-label="<?php esc_attr_e( 'Saved loop sections', 'jt-practice-player' ); ?>">
-					<option value=""><?php esc_html_e( 'Saved sections', 'jt-practice-player' ); ?></option>
-				</select>
-				<button type="button" class="jtpp-loop-delete"><?php esc_html_e( 'Delete saved', 'jt-practice-player' ); ?></button>
+			<div class="jtpp-loop-save-editor" hidden>
+				<label for="<?php echo esc_attr( $loop_name_id ); ?>"><?php esc_html_e( 'Cue name', 'jt-practice-player' ); ?></label>
+				<input type="text" id="<?php echo esc_attr( $loop_name_id ); ?>" class="jtpp-loop-name" value="" placeholder="<?php esc_attr_e( 'Section name', 'jt-practice-player' ); ?>" aria-label="<?php esc_attr_e( 'Saved cue name', 'jt-practice-player' ); ?>" />
+				<span class="jtpp-loop-save-range">0:00-0:00</span>
+				<div class="jtpp-loop-save-actions">
+					<button type="button" class="jtpp-loop-save-confirm"><?php esc_html_e( 'Save cue', 'jt-practice-player' ); ?></button>
+					<button type="button" class="jtpp-loop-save-cancel"><?php esc_html_e( 'Cancel', 'jt-practice-player' ); ?></button>
+				</div>
+			</div>
+			<div class="jtpp-loop-saved" hidden aria-label="<?php esc_attr_e( 'Saved loop cues', 'jt-practice-player' ); ?>">
+				<div class="jtpp-loop-saved-header">
+					<span><?php esc_html_e( 'Saved cues', 'jt-practice-player' ); ?></span>
+					<span><?php esc_html_e( 'Range', 'jt-practice-player' ); ?></span>
+					<span><?php esc_html_e( 'Action', 'jt-practice-player' ); ?></span>
+				</div>
+				<div class="jtpp-loop-cues"></div>
 			</div>
 		</div>
 		<div class="jtpp-controls">
@@ -241,6 +256,8 @@ function icon( string $name ): string {
 			return '<svg' . $attrs . '><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>';
 		case 'fullscreen':
 			return '<svg' . $attrs . '><path d="M8 3H3v5"></path><path d="M16 3h5v5"></path><path d="M21 16v5h-5"></path><path d="M3 16v5h5"></path></svg>';
+		case 'close':
+			return '<svg' . $attrs . '><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>';
 		case 'grip':
 			return '<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><circle cx="9" cy="5" r="1.5"></circle><circle cx="15" cy="5" r="1.5"></circle><circle cx="9" cy="12" r="1.5"></circle><circle cx="15" cy="12" r="1.5"></circle><circle cx="9" cy="19" r="1.5"></circle><circle cx="15" cy="19" r="1.5"></circle></svg>';
 	}

@@ -233,14 +233,23 @@ export class PracticePlayer {
 		this.loopToolsEl = this.rootEl.querySelector( '.jtpp-loop-tools' );
 		this.loopCurrentEl = this.rootEl.querySelector( '.jtpp-loop-current' );
 		this.loopSavedEl = this.rootEl.querySelector( '.jtpp-loop-saved' );
+		this.loopRangeEl = this.rootEl.querySelector( '.jtpp-loop-range' );
+		this.loopCuesEl = this.rootEl.querySelector( '.jtpp-loop-cues' );
+		this.loopSaveEditorEl = this.rootEl.querySelector(
+			'.jtpp-loop-save-editor'
+		);
 		this.loopNameInput = this.rootEl.querySelector( '.jtpp-loop-name' );
 		this.loopSaveButton = this.rootEl.querySelector( '.jtpp-loop-save' );
-		this.loopClearButton = this.rootEl.querySelector( '.jtpp-loop-clear' );
-		this.loopSavedSelect = this.rootEl.querySelector(
-			'.jtpp-loop-saved-select'
+		this.loopSaveRangeEl = this.rootEl.querySelector(
+			'.jtpp-loop-save-range'
 		);
-		this.loopDeleteButton =
-			this.rootEl.querySelector( '.jtpp-loop-delete' );
+		this.loopSaveConfirmButton = this.rootEl.querySelector(
+			'.jtpp-loop-save-confirm'
+		);
+		this.loopSaveCancelButton = this.rootEl.querySelector(
+			'.jtpp-loop-save-cancel'
+		);
+		this.loopClearButton = this.rootEl.querySelector( '.jtpp-loop-clear' );
 		this.zoomOutButton = this.rootEl.querySelector( '.jtpp-zoom-out' );
 		this.zoomResetButton = this.rootEl.querySelector( '.jtpp-zoom-reset' );
 		this.zoomInButton = this.rootEl.querySelector( '.jtpp-zoom-in' );
@@ -263,13 +272,26 @@ export class PracticePlayer {
 			this.clearLoopRegion()
 		);
 		this.loopSaveButton?.addEventListener( 'click', () =>
+			this.openLoopSaveEditor()
+		);
+		this.loopSaveConfirmButton?.addEventListener( 'click', () =>
 			this.saveCurrentLoop()
 		);
-		this.loopSavedSelect?.addEventListener( 'change', () =>
-			this.restoreSavedLoop()
+		this.loopSaveCancelButton?.addEventListener( 'click', () =>
+			this.closeLoopSaveEditor()
 		);
-		this.loopDeleteButton?.addEventListener( 'click', () =>
-			this.deleteSelectedSavedLoop()
+		this.loopNameInput?.addEventListener( 'keydown', ( event ) => {
+			if ( event.key === 'Enter' ) {
+				event.preventDefault();
+				this.saveCurrentLoop();
+			}
+			if ( event.key === 'Escape' ) {
+				event.preventDefault();
+				this.closeLoopSaveEditor();
+			}
+		} );
+		this.loopCuesEl?.addEventListener( 'click', ( event ) =>
+			this.handleCueClick( event )
 		);
 		this.zoomOutButton?.addEventListener( 'click', () =>
 			this.stepZoom( -1 )
@@ -951,17 +973,38 @@ export class PracticePlayer {
 		this.region?.remove();
 	}
 
+	openLoopSaveEditor() {
+		if ( ! this.loop || this.loop.end <= this.loop.start ) {
+			return;
+		}
+		if ( this.loopSaveEditorEl ) {
+			this.loopSaveEditorEl.hidden = false;
+		}
+		if ( this.loopNameInput ) {
+			this.loopNameInput.value = '';
+			this.loopNameInput.placeholder = this.defaultLoopName();
+			this.loopNameInput.focus();
+		}
+		this.reflectLoopTools();
+	}
+
+	closeLoopSaveEditor() {
+		if ( this.loopSaveEditorEl ) {
+			this.loopSaveEditorEl.hidden = true;
+		}
+		if ( this.loopNameInput ) {
+			this.loopNameInput.value = '';
+		}
+		this.requestStickyUpdate();
+	}
+
 	saveCurrentLoop() {
 		if ( ! this.loop || this.loop.end <= this.loop.start ) {
 			return;
 		}
 		const trackId = this.currentTrack().id;
 		const now = Date.now();
-		const name =
-			this.loopNameInput?.value.trim() ||
-			`${ formatTime( this.loop.start ) }-${ formatTime(
-				this.loop.end
-			) }`;
+		const name = this.loopNameInput?.value.trim() || this.defaultLoopName();
 		const savedLoop = {
 			id: String( now ),
 			name,
@@ -980,11 +1023,36 @@ export class PracticePlayer {
 		if ( this.loopNameInput ) {
 			this.loopNameInput.value = '';
 		}
+		this.closeLoopSaveEditor();
 		this.reflectLoopTools( savedLoop.id );
 	}
 
-	restoreSavedLoop() {
-		const id = this.loopSavedSelect?.value;
+	defaultLoopName() {
+		if ( ! this.loop ) {
+			return 'Saved cue';
+		}
+		return `${ formatTime( this.loop.start ) }-${ formatTime(
+			this.loop.end
+		) }`;
+	}
+
+	handleCueClick( event ) {
+		const target = event.target;
+		if ( ! target?.closest ) {
+			return;
+		}
+		const restoreButton = target.closest( '.jtpp-loop-cue-restore' );
+		if ( restoreButton ) {
+			this.restoreSavedLoop( restoreButton.dataset.loopId );
+			return;
+		}
+		const deleteButton = target.closest( '.jtpp-loop-cue-delete' );
+		if ( deleteButton ) {
+			this.deleteSavedLoop( deleteButton.dataset.loopId );
+		}
+	}
+
+	restoreSavedLoop( id ) {
 		if ( ! id || ! this.waveSurfer || ! this.regions ) {
 			this.reflectLoopTools();
 			return;
@@ -1021,8 +1089,7 @@ export class PracticePlayer {
 		this.requestStickyUpdate();
 	}
 
-	deleteSelectedSavedLoop() {
-		const id = this.loopSavedSelect?.value;
+	deleteSavedLoop( id ) {
 		if ( ! id ) {
 			return;
 		}
@@ -1147,43 +1214,84 @@ export class PracticePlayer {
 		if ( this.loopCurrentEl ) {
 			this.loopCurrentEl.hidden = ! hasSelection;
 		}
+		if ( this.loopSaveEditorEl ) {
+			this.loopSaveEditorEl.hidden =
+				! hasSelection || this.loopSaveEditorEl.hidden;
+		}
 		if ( this.loopSavedEl ) {
 			this.loopSavedEl.hidden = savedLoops.length === 0;
 		}
 		if ( this.loopClearButton ) {
 			if ( hasSelection ) {
-				this.loopClearButton.textContent = `Clear selection: ${ formatTime(
-					this.loop.start
-				) }-${ formatTime( this.loop.end ) }`;
+				this.loopClearButton.title = 'Clear current loop';
 			}
 		}
-		if ( this.loopNameInput && hasSelection ) {
-			this.loopNameInput.placeholder = `Section ${ formatTime(
+		if ( this.loopRangeEl && hasSelection ) {
+			this.loopRangeEl.textContent = `${ formatTime(
 				this.loop.start
 			) }-${ formatTime( this.loop.end ) }`;
 		}
-		if ( this.loopSavedSelect ) {
-			const selected =
-				selectedSavedLoop || this.loopSavedSelect.value || '';
-			this.loopSavedSelect.textContent = '';
-			const placeholder = document.createElement( 'option' );
-			placeholder.value = '';
-			placeholder.textContent = 'Saved sections';
-			this.loopSavedSelect.append( placeholder );
-			savedLoops.forEach( ( loop ) => {
-				const option = document.createElement( 'option' );
-				option.value = loop.id;
-				option.textContent = `${ loop.name } (${ formatTime(
-					loop.start
-				) }-${ formatTime( loop.end ) })`;
-				this.loopSavedSelect.append( option );
-			} );
-			if ( savedLoops.some( ( loop ) => loop.id === selected ) ) {
-				this.loopSavedSelect.value = selected;
-			}
+		if ( this.loopSaveRangeEl && hasSelection ) {
+			this.loopSaveRangeEl.textContent = `${ formatTime(
+				this.loop.start
+			) }-${ formatTime( this.loop.end ) }`;
 		}
-		if ( this.loopDeleteButton ) {
-			this.loopDeleteButton.disabled = ! this.loopSavedSelect?.value;
+		if ( this.loopNameInput && hasSelection ) {
+			this.loopNameInput.placeholder = this.defaultLoopName();
+		}
+		if ( this.loopCuesEl ) {
+			const selected = selectedSavedLoop || '';
+			this.loopCuesEl.textContent = '';
+			savedLoops.forEach( ( loop ) => {
+				const row = document.createElement( 'div' );
+				row.className = 'jtpp-loop-cue';
+				if ( loop.id === selected ) {
+					row.classList.add( 'is-active' );
+				}
+
+				const copy = document.createElement( 'div' );
+				copy.className = 'jtpp-loop-cue-copy';
+
+				const name = document.createElement( 'strong' );
+				name.textContent = loop.name;
+				copy.append( name );
+
+				const meta = document.createElement( 'small' );
+				meta.textContent =
+					loop.rate && loop.rate !== 1
+						? `${ loop.rate }x playback`
+						: 'Auto-loops when restored';
+				copy.append( meta );
+
+				const range = document.createElement( 'span' );
+				range.className = 'jtpp-loop-cue-range';
+				range.textContent = `${ formatTime(
+					loop.start
+				) }-${ formatTime( loop.end ) }`;
+
+				const restore = document.createElement( 'button' );
+				restore.type = 'button';
+				restore.className = 'jtpp-loop-cue-restore';
+				restore.dataset.loopId = loop.id;
+				restore.textContent = 'Restore';
+				restore.setAttribute(
+					'aria-label',
+					`Restore cue ${ loop.name }`
+				);
+
+				const deleteButton = document.createElement( 'button' );
+				deleteButton.type = 'button';
+				deleteButton.className = 'jtpp-loop-cue-delete';
+				deleteButton.dataset.loopId = loop.id;
+				deleteButton.textContent = 'Delete';
+				deleteButton.setAttribute(
+					'aria-label',
+					`Delete cue ${ loop.name }`
+				);
+
+				row.append( copy, range, restore, deleteButton );
+				this.loopCuesEl.append( row );
+			} );
 		}
 		this.requestStickyUpdate();
 	}

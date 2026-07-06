@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "jt_practice_player",
+  "project_id": "60c2ea6b-da32-4267-8843-4051a6927bc8"
+}

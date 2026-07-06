@@ -31,6 +31,7 @@ const CURSOR_COLOR = '#d6422b';
 const WAVEFORM_HEIGHT = 106;
 const LOOP_CONTEXT_SECONDS = 5;
 const ZOOM_STEP = 1.35;
+const REPEAT_OFF = 'off';
 const REPEAT_PLAYLIST = 'playlist';
 const REPEAT_TRACK = 'track';
 const PLAY_ICON =
@@ -132,7 +133,7 @@ export class PracticePlayer {
 		this.restoring = false;
 		this.checkedIds = loadQueue( this.storageTrackIds );
 		this.volume = loadVolume();
-		this.repeatMode = this.options.playlist ? REPEAT_PLAYLIST : null;
+		this.repeatMode = this.options.playlist ? REPEAT_OFF : null;
 		this.randomMode = false;
 
 		this.cacheElements();
@@ -773,7 +774,7 @@ export class PracticePlayer {
 			this.play();
 			return;
 		}
-		this.advance( 1, true );
+		this.advance( 1, true, this.repeatMode === REPEAT_PLAYLIST );
 	}
 
 	togglePlay() {
@@ -796,8 +797,13 @@ export class PracticePlayer {
 		if ( ! this.options.playlist ) {
 			return;
 		}
-		this.repeatMode =
-			this.repeatMode === REPEAT_TRACK ? REPEAT_PLAYLIST : REPEAT_TRACK;
+		if ( this.repeatMode === REPEAT_OFF ) {
+			this.repeatMode = REPEAT_PLAYLIST;
+		} else if ( this.repeatMode === REPEAT_PLAYLIST ) {
+			this.repeatMode = REPEAT_TRACK;
+		} else {
+			this.repeatMode = REPEAT_OFF;
+		}
 		this.reflectPlaybackModes();
 	}
 
@@ -953,22 +959,32 @@ export class PracticePlayer {
 	reflectPlaybackModes() {
 		if ( this.repeatButton ) {
 			const trackRepeat = this.repeatMode === REPEAT_TRACK;
+			const playlistRepeat = this.repeatMode === REPEAT_PLAYLIST;
 			this.repeatButton.classList.toggle( 'is-active', trackRepeat );
 			this.repeatButton.classList.toggle(
 				'is-playlist-repeat',
-				! trackRepeat
+				playlistRepeat
 			);
 			this.repeatButton.classList.toggle(
 				'is-track-repeat',
 				trackRepeat
 			);
-			this.repeatButton.setAttribute(
-				'aria-label',
-				trackRepeat ? 'Repeat current track' : 'Repeat whole playlist'
+			this.repeatButton.classList.toggle(
+				'is-repeat-off',
+				this.repeatMode === REPEAT_OFF
 			);
-			this.repeatButton.title = trackRepeat
-				? 'Repeat current track'
-				: 'Repeat whole playlist';
+			let label = 'Repeat off';
+			if ( trackRepeat ) {
+				label = 'Repeat current track';
+			} else if ( playlistRepeat ) {
+				label = 'Repeat whole playlist';
+			}
+			this.repeatButton.setAttribute( 'aria-label', label );
+			this.repeatButton.setAttribute(
+				'aria-pressed',
+				this.repeatMode === REPEAT_OFF ? 'false' : 'true'
+			);
+			this.repeatButton.title = label;
 		}
 		if ( this.randomButton ) {
 			this.randomButton.classList.toggle( 'is-active', this.randomMode );
@@ -1032,21 +1048,23 @@ export class PracticePlayer {
 		this.scheduleSave();
 	}
 
-	advance( direction, autoplay ) {
-		const nextIndex = this.nextQueuedIndex( direction );
+	advance( direction, autoplay, wrap = true ) {
+		const nextIndex = this.nextQueuedIndex( direction, wrap );
 		if ( nextIndex === null ) {
 			return;
 		}
 		this.loadTrack( nextIndex, autoplay );
 	}
 
-	nextQueuedIndex( direction ) {
+	nextQueuedIndex( direction, wrap = true ) {
 		return nextPlaylistIndex(
 			this.tracks.map( ( track ) => track.id ),
 			this.checkedIds,
 			this.activeIndex,
 			direction,
-			this.randomMode
+			this.randomMode,
+			Math.random,
+			wrap
 		);
 	}
 

@@ -75,6 +75,45 @@ describe( 'nextPlaylistIndex', () => {
 		expect( nextPlaylistIndex( trackIds, [], 3, 1 ) ).toBe( 0 );
 	} );
 
+	it( 'can stop at the end instead of wrapping', () => {
+		expect(
+			nextPlaylistIndex(
+				trackIds,
+				[ 'intro', 'chorus' ],
+				2,
+				1,
+				false,
+				Math.random,
+				false
+			)
+		).toBeNull();
+		expect(
+			nextPlaylistIndex(
+				trackIds,
+				[ 'intro', 'chorus' ],
+				0,
+				-1,
+				false,
+				Math.random,
+				false
+			)
+		).toBeNull();
+	} );
+
+	it( 'does not wrap to the first checked track when current is outside the queue', () => {
+		expect(
+			nextPlaylistIndex(
+				trackIds,
+				[ 'chorus' ],
+				3,
+				1,
+				false,
+				Math.random,
+				false
+			)
+		).toBeNull();
+	} );
+
 	it( 'uses the next checked track when the active track is outside the queue', () => {
 		expect( nextPlaylistIndex( trackIds, [ 'chorus' ], 0, 1 ) ).toBe( 2 );
 		expect( nextPlaylistIndex( trackIds, [ 'chorus' ], 3, -1 ) ).toBe( 2 );
@@ -86,6 +125,23 @@ describe( 'nextPlaylistIndex', () => {
 		).toBe( 0 );
 		expect(
 			nextPlaylistIndex( trackIds, trackIds, 1, 1, true, () => 0.99 )
+		).toBe( 3 );
+	} );
+
+	it( 'stops random playback at the end when wrapping is disabled', () => {
+		expect(
+			nextPlaylistIndex( trackIds, trackIds, 3, 1, true, () => 0, false )
+		).toBeNull();
+		expect(
+			nextPlaylistIndex(
+				trackIds,
+				trackIds,
+				1,
+				1,
+				true,
+				() => 0.99,
+				false
+			)
 		).toBe( 3 );
 	} );
 } );

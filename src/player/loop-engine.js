@@ -35,7 +35,8 @@ export function nextPlaylistIndex(
 	activeIndex,
 	direction,
 	random = false,
-	randomFn = Math.random
+	randomFn = Math.random,
+	wrap = true
 ) {
 	const checked = trackIds
 		.map( ( id, index ) => ( checkedIds.includes( id ) ? index : null ) )
@@ -47,26 +48,34 @@ export function nextPlaylistIndex(
 		return null;
 	}
 	if ( random && direction > 0 ) {
-		const candidates =
-			playable.length > 1
-				? playable.filter( ( index ) => index !== activeIndex )
-				: playable;
+		const candidates = wrap
+			? playable.filter( ( index ) => index !== activeIndex )
+			: playable.filter( ( index ) => index > activeIndex );
+		if ( candidates.length === 0 ) {
+			return null;
+		}
 		return candidates[ Math.floor( randomFn() * candidates.length ) ];
 	}
 	const currentPosition = playable.indexOf( activeIndex );
 	if ( currentPosition !== -1 ) {
-		return playable[
-			( currentPosition + direction + playable.length ) % playable.length
-		];
+		const nextPosition = currentPosition + direction;
+		if (
+			! wrap &&
+			( nextPosition < 0 || nextPosition >= playable.length )
+		) {
+			return null;
+		}
+		return playable[ ( nextPosition + playable.length ) % playable.length ];
 	}
 	if ( direction > 0 ) {
 		return (
-			playable.find( ( index ) => index > activeIndex ) ?? playable[ 0 ]
+			playable.find( ( index ) => index > activeIndex ) ??
+			( wrap ? playable[ 0 ] : null )
 		);
 	}
 	return (
 		[ ...playable ].reverse().find( ( index ) => index < activeIndex ) ??
-		playable[ playable.length - 1 ]
+		( wrap ? playable[ playable.length - 1 ] : null )
 	);
 }
 

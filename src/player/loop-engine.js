@@ -29,6 +29,47 @@ export function nextSpeed( current, direction ) {
 	];
 }
 
+export function nextPlaylistIndex(
+	trackIds,
+	checkedIds,
+	activeIndex,
+	direction,
+	random = false,
+	randomFn = Math.random
+) {
+	const checked = trackIds
+		.map( ( id, index ) => ( checkedIds.includes( id ) ? index : null ) )
+		.filter( ( index ) => index !== null );
+	const playable = checked.length
+		? checked
+		: trackIds.map( ( _id, index ) => index );
+	if ( playable.length === 0 ) {
+		return null;
+	}
+	if ( random && direction > 0 ) {
+		const candidates =
+			playable.length > 1
+				? playable.filter( ( index ) => index !== activeIndex )
+				: playable;
+		return candidates[ Math.floor( randomFn() * candidates.length ) ];
+	}
+	const currentPosition = playable.indexOf( activeIndex );
+	if ( currentPosition !== -1 ) {
+		return playable[
+			( currentPosition + direction + playable.length ) % playable.length
+		];
+	}
+	if ( direction > 0 ) {
+		return (
+			playable.find( ( index ) => index > activeIndex ) ?? playable[ 0 ]
+		);
+	}
+	return (
+		[ ...playable ].reverse().find( ( index ) => index < activeIndex ) ??
+		playable[ playable.length - 1 ]
+	);
+}
+
 export function formatTime( seconds ) {
 	if ( ! Number.isFinite( seconds ) || seconds < 0 ) {
 		return '0:00';

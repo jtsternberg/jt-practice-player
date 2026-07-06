@@ -2,6 +2,7 @@ import {
 	loopJumpTarget,
 	clampSeek,
 	nextSpeed,
+	nextPlaylistIndex,
 	SPEED_STEPS,
 } from '../loop-engine';
 
@@ -54,5 +55,37 @@ describe( 'nextSpeed', () => {
 		expect( SPEED_STEPS ).toEqual( [
 			0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 1, 1.1, 1.2, 1.25, 1.5, 1.75, 2,
 		] );
+	} );
+} );
+
+describe( 'nextPlaylistIndex', () => {
+	const trackIds = [ 'intro', 'verse', 'chorus', 'bridge' ];
+
+	it( 'advances through checked tracks and wraps', () => {
+		expect(
+			nextPlaylistIndex( trackIds, [ 'intro', 'chorus' ], 0, 1 )
+		).toBe( 2 );
+		expect(
+			nextPlaylistIndex( trackIds, [ 'intro', 'chorus' ], 2, 1 )
+		).toBe( 0 );
+	} );
+
+	it( 'falls back to the whole playlist when the saved queue is empty', () => {
+		expect( nextPlaylistIndex( trackIds, [], 1, 1 ) ).toBe( 2 );
+		expect( nextPlaylistIndex( trackIds, [], 3, 1 ) ).toBe( 0 );
+	} );
+
+	it( 'uses the next checked track when the active track is outside the queue', () => {
+		expect( nextPlaylistIndex( trackIds, [ 'chorus' ], 0, 1 ) ).toBe( 2 );
+		expect( nextPlaylistIndex( trackIds, [ 'chorus' ], 3, -1 ) ).toBe( 2 );
+	} );
+
+	it( 'can choose a random forward track without repeating the current one', () => {
+		expect(
+			nextPlaylistIndex( trackIds, trackIds, 1, 1, true, () => 0 )
+		).toBe( 0 );
+		expect(
+			nextPlaylistIndex( trackIds, trackIds, 1, 1, true, () => 0.99 )
+		).toBe( 3 );
 	} );
 } );

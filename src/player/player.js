@@ -4,6 +4,7 @@ import {
 	loopJumpTarget,
 	clampSeek,
 	nextSpeed,
+	nextPlaylistIndex,
 	SPEED_STEPS,
 	formatTime,
 } from './loop-engine';
@@ -30,6 +31,8 @@ const CURSOR_COLOR = '#d6422b';
 const WAVEFORM_HEIGHT = 106;
 const LOOP_CONTEXT_SECONDS = 5;
 const ZOOM_STEP = 1.35;
+const REPEAT_PLAYLIST = 'playlist';
+const REPEAT_TRACK = 'track';
 const PLAY_ICON =
 	'<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="7 5 19 12 7 19 7 5"></polygon></svg>';
 const PAUSE_ICON =
@@ -75,7 +78,9 @@ function bindGlobalKeyboard() {
 		// the Media Session API bound separately.
 		const focusInPlayer =
 			activePlayer.rootEl.contains( event.target ) ||
-			activePlayer.rootEl.contains( event.target?.ownerDocument?.activeElement );
+			activePlayer.rootEl.contains(
+				event.target?.ownerDocument?.activeElement
+			);
 		if ( ! focusInPlayer ) {
 			return;
 		}
@@ -127,6 +132,8 @@ export class PracticePlayer {
 		this.restoring = false;
 		this.checkedIds = loadQueue( this.storageTrackIds );
 		this.volume = loadVolume();
+		this.repeatMode = this.options.playlist ? REPEAT_PLAYLIST : null;
+		this.randomMode = false;
 
 		this.cacheElements();
 		this.restoreOrder();
@@ -205,6 +212,8 @@ export class PracticePlayer {
 		this.totalTimeEl = this.rootEl.querySelector( '.jtpp-time-total' );
 		this.playButton = this.rootEl.querySelector( '.jtpp-play' );
 		this.loopButton = this.rootEl.querySelector( '.jtpp-loop' );
+		this.repeatButton = this.rootEl.querySelector( '.jtpp-repeat' );
+		this.randomButton = this.rootEl.querySelector( '.jtpp-random' );
 		this.fullscreenButton = this.rootEl.querySelector( '.jtpp-fullscreen' );
 		this.loopToolsEl = this.rootEl.querySelector( '.jtpp-loop-tools' );
 		this.loopClearButton = this.rootEl.querySelector( '.jtpp-loop-clear' );
@@ -218,6 +227,12 @@ export class PracticePlayer {
 	bindControls() {
 		this.playButton?.addEventListener( 'click', () => this.togglePlay() );
 		this.loopButton?.addEventListener( 'click', () => this.toggleLoop() );
+		this.repeatButton?.addEventListener( 'click', () =>
+			this.toggleRepeatMode()
+		);
+		this.randomButton?.addEventListener( 'click', () =>
+			this.toggleRandomMode()
+		);
 		this.fullscreenButton?.addEventListener( 'click', () =>
 			this.toggleFullscreen()
 		);
@@ -286,6 +301,7 @@ export class PracticePlayer {
 		this.rootEl.addEventListener( 'focusin', () => {
 			activePlayer = this;
 		} );
+		this.reflectPlaybackModes();
 		document.addEventListener( 'fullscreenchange', () =>
 			this.reflectFullscreen()
 		);
@@ -754,6 +770,11 @@ export class PracticePlayer {
 			this.play();
 			return;
 		}
+		if ( this.repeatMode === REPEAT_TRACK ) {
+			this.seekStart();
+			this.play();
+			return;
+		}
 		this.advance( 1, true );
 	}
 
@@ -784,6 +805,23 @@ export class PracticePlayer {
 		}
 		this.reflectLoop();
 		this.scheduleSave();
+	}
+
+	toggleRepeatMode() {
+		if ( ! this.options.playlist ) {
+			return;
+		}
+		this.repeatMode =
+			this.repeatMode === REPEAT_TRACK ? REPEAT_PLAYLIST : REPEAT_TRACK;
+		this.reflectPlaybackModes();
+	}
+
+	toggleRandomMode() {
+		if ( ! this.options.playlist ) {
+			return;
+		}
+		this.randomMode = ! this.randomMode;
+		this.reflectPlaybackModes();
 	}
 
 	toggleFullscreen() {
@@ -933,6 +971,38 @@ export class PracticePlayer {
 		this.requestStickyUpdate();
 	}
 
+	reflectPlaybackModes() {
+		if ( this.repeatButton ) {
+			const trackRepeat = this.repeatMode === REPEAT_TRACK;
+			this.repeatButton.classList.toggle( 'is-active', trackRepeat );
+			this.repeatButton.classList.toggle(
+				'is-playlist-repeat',
+				! trackRepeat
+			);
+			this.repeatButton.classList.toggle(
+				'is-track-repeat',
+				trackRepeat
+			);
+			this.repeatButton.setAttribute(
+				'aria-label',
+				trackRepeat ? 'Repeat current track' : 'Repeat whole playlist'
+			);
+			this.repeatButton.title = trackRepeat
+				? 'Repeat current track'
+				: 'Repeat whole playlist';
+		}
+		if ( this.randomButton ) {
+			this.randomButton.classList.toggle( 'is-active', this.randomMode );
+			this.randomButton.setAttribute(
+				'aria-pressed',
+				this.randomMode ? 'true' : 'false'
+			);
+			this.randomButton.title = this.randomMode
+				? 'Random order on'
+				: 'Random order';
+		}
+	}
+
 	cycleSpeed() {
 		const current = this.waveSurfer?.getPlaybackRate?.() || 1;
 		const rate =
@@ -992,32 +1062,12 @@ export class PracticePlayer {
 	}
 
 	nextQueuedIndex( direction ) {
-		const checked = this.tracks
-			.map( ( track, index ) =>
-				this.checkedIds.includes( track.id ) ? index : null
-			)
-			.filter( ( index ) => index !== null );
-		if ( checked.length === 0 ) {
-			return null;
-		}
-		const currentPosition = checked.indexOf( this.activeIndex );
-		if ( currentPosition !== -1 ) {
-			return checked[
-				( currentPosition + direction + checked.length ) %
-					checked.length
-			];
-		}
-		if ( direction > 0 ) {
-			return (
-				checked.find( ( index ) => index > this.activeIndex ) ??
-				checked[ 0 ]
-			);
-		}
-		return (
-			[ ...checked ]
-				.reverse()
-				.find( ( index ) => index < this.activeIndex ) ??
-			checked[ checked.length - 1 ]
+		return nextPlaylistIndex(
+			this.tracks.map( ( track ) => track.id ),
+			this.checkedIds,
+			this.activeIndex,
+			direction,
+			this.randomMode
 		);
 	}
 

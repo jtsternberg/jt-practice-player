@@ -39,6 +39,34 @@ export function saveTrackState(
 	}
 }
 
+export function loadSavedLoops( trackId, storage = defaultStorage() ) {
+	try {
+		const raw =
+			storage && storage.getItem( `${ PREFIX }loops:${ trackId }` );
+		const parsed = raw ? JSON.parse( raw ) : null;
+		if ( ! Array.isArray( parsed ) ) {
+			return [];
+		}
+		return parsed
+			.map( normalizeSavedLoop )
+			.filter( Boolean )
+			.sort( ( a, b ) => ( b.updatedAt || 0 ) - ( a.updatedAt || 0 ) );
+	} catch {
+		return [];
+	}
+}
+
+export function saveSavedLoops( trackId, loops, storage = defaultStorage() ) {
+	try {
+		storage.setItem(
+			`${ PREFIX }loops:${ trackId }`,
+			JSON.stringify( loops.map( normalizeSavedLoop ).filter( Boolean ) )
+		);
+	} catch {
+		// Persistence is best-effort.
+	}
+}
+
 export function loadQueue( trackIds, storage = defaultStorage() ) {
 	try {
 		const raw =
@@ -109,6 +137,41 @@ export function saveVolume( volume, storage = defaultStorage() ) {
 	} catch {
 		// Best-effort.
 	}
+}
+
+function normalizeSavedLoop( loop ) {
+	if ( ! loop || typeof loop !== 'object' ) {
+		return null;
+	}
+	const start = Number( loop.start );
+	const end = Number( loop.end );
+	if (
+		! Number.isFinite( start ) ||
+		! Number.isFinite( end ) ||
+		end <= start
+	) {
+		return null;
+	}
+	const name = String( loop.name || '' ).trim();
+	return {
+		id: String( loop.id || `${ start }-${ end }` ),
+		name:
+			name ||
+			`${ formatStorageTime( start ) }-${ formatStorageTime( end ) }`,
+		start,
+		end,
+		rate: Number.isFinite( Number( loop.rate ) ) ? Number( loop.rate ) : 1,
+		updatedAt: Number.isFinite( Number( loop.updatedAt ) )
+			? Number( loop.updatedAt )
+			: Date.now(),
+	};
+}
+
+function formatStorageTime( seconds ) {
+	const safe = Math.max( 0, Number( seconds ) || 0 );
+	const m = Math.floor( safe / 60 );
+	const s = Math.floor( safe % 60 );
+	return `${ m }:${ String( s ).padStart( 2, '0' ) }`;
 }
 
 function prune( storage, now ) {

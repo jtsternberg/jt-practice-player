@@ -1,6 +1,8 @@
 import {
 	loadTrackState,
 	saveTrackState,
+	loadSavedLoops,
+	saveSavedLoops,
 	loadQueue,
 	saveQueue,
 	loadOrder,
@@ -76,6 +78,55 @@ describe( 'persistence', () => {
 		expect( loadQueue( [ 1, 2, 3 ], s ) ).toEqual( [ 1, 3 ] );
 		expect( loadOrder( [ 1, 2, 3 ], s ) ).toEqual( [ 3, 1, 2 ] );
 		expect( loadVolume( s ) ).toBe( 0.4 );
+	} );
+	it( 'round-trips saved loop sections newest first', () => {
+		const s = memoryStorage();
+		saveSavedLoops(
+			'url:1234abcd5678ef90',
+			[
+				{
+					id: 'a',
+					name: 'Verse',
+					start: 12,
+					end: 18,
+					rate: 0.8,
+					updatedAt: 100,
+				},
+				{
+					id: 'b',
+					name: 'Chorus',
+					start: 44,
+					end: 52,
+					rate: 1,
+					updatedAt: 200,
+				},
+			],
+			s
+		);
+		expect( loadSavedLoops( 'url:1234abcd5678ef90', s ) ).toEqual( [
+			expect.objectContaining( { id: 'b', name: 'Chorus' } ),
+			expect.objectContaining( { id: 'a', name: 'Verse' } ),
+		] );
+	} );
+	it( 'normalizes and filters saved loop sections', () => {
+		const s = memoryStorage();
+		saveSavedLoops(
+			1,
+			[
+				{ id: 'good', name: '', start: 4, end: 8, rate: '1.25' },
+				{ id: 'bad', name: 'Bad', start: 9, end: 3 },
+			],
+			s
+		);
+		expect( loadSavedLoops( 1, s ) ).toEqual( [
+			expect.objectContaining( {
+				id: 'good',
+				name: '0:04-0:08',
+				start: 4,
+				end: 8,
+				rate: 1.25,
+			} ),
+		] );
 	} );
 	it( 'defaults the queue to all tracks', () => {
 		expect( loadQueue( [ 1, 2, 3 ], memoryStorage() ) ).toEqual( [

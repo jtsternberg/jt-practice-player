@@ -11,6 +11,8 @@ import {
 import {
 	loadTrackState,
 	saveTrackState,
+	loadSavedLoops,
+	saveSavedLoops,
 	loadQueue,
 	saveQueue,
 	loadOrder,
@@ -35,6 +37,7 @@ const REPEAT_OFF = 'off';
 const REPEAT_PLAYLIST = 'playlist';
 const REPEAT_TRACK = 'track';
 const AUDIO_CACHE_LIMIT = 10;
+const SAVED_LOOP_LIMIT = 20;
 const PEAK_CHANNELS = 2;
 const PEAK_SAMPLES = 8000;
 const PEAK_CACHE_LIMIT = 12;
@@ -228,7 +231,16 @@ export class PracticePlayer {
 		this.randomButton = this.rootEl.querySelector( '.jtpp-random' );
 		this.fullscreenButton = this.rootEl.querySelector( '.jtpp-fullscreen' );
 		this.loopToolsEl = this.rootEl.querySelector( '.jtpp-loop-tools' );
+		this.loopCurrentEl = this.rootEl.querySelector( '.jtpp-loop-current' );
+		this.loopSavedEl = this.rootEl.querySelector( '.jtpp-loop-saved' );
+		this.loopNameInput = this.rootEl.querySelector( '.jtpp-loop-name' );
+		this.loopSaveButton = this.rootEl.querySelector( '.jtpp-loop-save' );
 		this.loopClearButton = this.rootEl.querySelector( '.jtpp-loop-clear' );
+		this.loopSavedSelect = this.rootEl.querySelector(
+			'.jtpp-loop-saved-select'
+		);
+		this.loopDeleteButton =
+			this.rootEl.querySelector( '.jtpp-loop-delete' );
 		this.zoomOutButton = this.rootEl.querySelector( '.jtpp-zoom-out' );
 		this.zoomResetButton = this.rootEl.querySelector( '.jtpp-zoom-reset' );
 		this.zoomInButton = this.rootEl.querySelector( '.jtpp-zoom-in' );
@@ -249,6 +261,15 @@ export class PracticePlayer {
 		);
 		this.loopClearButton?.addEventListener( 'click', () =>
 			this.clearLoopRegion()
+		);
+		this.loopSaveButton?.addEventListener( 'click', () =>
+			this.saveCurrentLoop()
+		);
+		this.loopSavedSelect?.addEventListener( 'change', () =>
+			this.restoreSavedLoop()
+		);
+		this.loopDeleteButton?.addEventListener( 'click', () =>
+			this.deleteSelectedSavedLoop()
 		);
 		this.zoomOutButton?.addEventListener( 'click', () =>
 			this.stepZoom( -1 )
@@ -511,6 +532,7 @@ export class PracticePlayer {
 		this.trackStateRestored = false;
 		this.setFallbackMode( false );
 		this.updateActiveTrack();
+		this.reflectLoopTools();
 		this.createWaveSurfer( this.tracks[ index ], autoplay );
 	}
 
@@ -929,6 +951,89 @@ export class PracticePlayer {
 		this.region?.remove();
 	}
 
+	saveCurrentLoop() {
+		if ( ! this.loop || this.loop.end <= this.loop.start ) {
+			return;
+		}
+		const trackId = this.currentTrack().id;
+		const now = Date.now();
+		const name =
+			this.loopNameInput?.value.trim() ||
+			`${ formatTime( this.loop.start ) }-${ formatTime(
+				this.loop.end
+			) }`;
+		const savedLoop = {
+			id: String( now ),
+			name,
+			start: this.loop.start,
+			end: this.loop.end,
+			rate: this.waveSurfer?.getPlaybackRate?.() || 1,
+			updatedAt: now,
+		};
+		const loops = [
+			savedLoop,
+			...loadSavedLoops( trackId ).filter(
+				( loop ) => loop.name.toLowerCase() !== name.toLowerCase()
+			),
+		].slice( 0, SAVED_LOOP_LIMIT );
+		saveSavedLoops( trackId, loops );
+		if ( this.loopNameInput ) {
+			this.loopNameInput.value = '';
+		}
+		this.reflectLoopTools( savedLoop.id );
+	}
+
+	restoreSavedLoop() {
+		const id = this.loopSavedSelect?.value;
+		if ( ! id || ! this.waveSurfer || ! this.regions ) {
+			this.reflectLoopTools();
+			return;
+		}
+		const savedLoop = loadSavedLoops( this.currentTrack().id ).find(
+			( loop ) => loop.id === id
+		);
+		if ( ! savedLoop ) {
+			this.reflectLoopTools();
+			return;
+		}
+		this.restoring = true;
+		this.region?.remove();
+		this.region = this.regions.addRegion( {
+			start: savedLoop.start,
+			end: savedLoop.end,
+			color: REGION_COLOR,
+			drag: true,
+			resize: true,
+			minLength: 0.2,
+		} );
+		this.loop = {
+			start: savedLoop.start,
+			end: savedLoop.end,
+			on: true,
+		};
+		this.attachRegionClear( this.region );
+		this.restoring = false;
+		this.applyRate( savedLoop.rate || 1 );
+		this.seekLoopStart();
+		this.focusLoopZoom();
+		this.reflectLoopTools( id );
+		this.scheduleSave();
+		this.requestStickyUpdate();
+	}
+
+	deleteSelectedSavedLoop() {
+		const id = this.loopSavedSelect?.value;
+		if ( ! id ) {
+			return;
+		}
+		const trackId = this.currentTrack().id;
+		const loops = loadSavedLoops( trackId ).filter(
+			( loop ) => loop.id !== id
+		);
+		saveSavedLoops( trackId, loops );
+		this.reflectLoopTools();
+	}
+
 	seekLoopStart() {
 		if ( ! this.loop || ! this.waveSurfer ) {
 			return;
@@ -1031,17 +1136,54 @@ export class PracticePlayer {
 		this.waveSurfer.setScroll( 0 );
 	}
 
-	reflectLoopTools() {
+	reflectLoopTools( selectedSavedLoop = '' ) {
+		const hasSelection = Boolean( this.loop && this.region );
+		const savedLoops = this.currentTrack()
+			? loadSavedLoops( this.currentTrack().id )
+			: [];
 		if ( this.loopToolsEl ) {
-			this.loopToolsEl.hidden = ! Boolean( this.loop && this.region );
+			this.loopToolsEl.hidden = ! hasSelection && savedLoops.length === 0;
+		}
+		if ( this.loopCurrentEl ) {
+			this.loopCurrentEl.hidden = ! hasSelection;
+		}
+		if ( this.loopSavedEl ) {
+			this.loopSavedEl.hidden = savedLoops.length === 0;
 		}
 		if ( this.loopClearButton ) {
-			const hasSelection = Boolean( this.loop && this.region );
 			if ( hasSelection ) {
 				this.loopClearButton.textContent = `Clear selection: ${ formatTime(
 					this.loop.start
 				) }-${ formatTime( this.loop.end ) }`;
 			}
+		}
+		if ( this.loopNameInput && hasSelection ) {
+			this.loopNameInput.placeholder = `Section ${ formatTime(
+				this.loop.start
+			) }-${ formatTime( this.loop.end ) }`;
+		}
+		if ( this.loopSavedSelect ) {
+			const selected =
+				selectedSavedLoop || this.loopSavedSelect.value || '';
+			this.loopSavedSelect.textContent = '';
+			const placeholder = document.createElement( 'option' );
+			placeholder.value = '';
+			placeholder.textContent = 'Saved sections';
+			this.loopSavedSelect.append( placeholder );
+			savedLoops.forEach( ( loop ) => {
+				const option = document.createElement( 'option' );
+				option.value = loop.id;
+				option.textContent = `${ loop.name } (${ formatTime(
+					loop.start
+				) }-${ formatTime( loop.end ) })`;
+				this.loopSavedSelect.append( option );
+			} );
+			if ( savedLoops.some( ( loop ) => loop.id === selected ) ) {
+				this.loopSavedSelect.value = selected;
+			}
+		}
+		if ( this.loopDeleteButton ) {
+			this.loopDeleteButton.disabled = ! this.loopSavedSelect?.value;
 		}
 		this.requestStickyUpdate();
 	}

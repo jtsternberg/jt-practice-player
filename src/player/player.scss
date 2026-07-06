@@ -468,7 +468,47 @@
 	display: none;
 }
 
-.jtpp-loop-clear {
+.jtpp-loop-current,
+.jtpp-loop-saved {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+}
+
+.jtpp-loop-current[hidden],
+.jtpp-loop-saved[hidden] {
+	display: none;
+}
+
+.jtpp-loop-name,
+.jtpp-loop-saved-select {
+	width: auto;
+	min-width: 138px;
+	height: 32px;
+	padding: 0 10px;
+	border: 1px solid var(--jtpp-line);
+	border-radius: 999px;
+	color: inherit;
+	background: color-mix(in srgb, currentcolor 3%, transparent);
+	box-shadow: none;
+	font: inherit;
+	font-size: 0.82rem;
+	font-weight: 600;
+	letter-spacing: 0;
+}
+
+.jtpp-loop-name:focus,
+.jtpp-loop-saved-select:focus {
+	border-color: var(--jtpp-loop);
+	outline: none;
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--jtpp-loop) 18%, transparent);
+}
+
+.jtpp-loop-clear,
+.jtpp-loop-save,
+.jtpp-loop-delete {
 	padding: 4px 12px;
 	border: 1px solid color-mix(in srgb, var(--jtpp-loop) 44%, transparent);
 	border-radius: 999px;
@@ -486,8 +526,17 @@
 		color 140ms ease;
 }
 
+.jtpp-loop-delete:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
 .jtpp-loop-clear:hover,
-.jtpp-loop-clear:focus-visible {
+.jtpp-loop-clear:focus-visible,
+.jtpp-loop-save:hover,
+.jtpp-loop-save:focus-visible,
+.jtpp-loop-delete:not(:disabled):hover,
+.jtpp-loop-delete:not(:disabled):focus-visible {
 	color: color-mix(in srgb, currentcolor 92%, #000);
 	border-color: var(--jtpp-loop);
 	background: color-mix(in srgb, var(--jtpp-loop) 16%, transparent);

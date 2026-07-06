@@ -166,11 +166,21 @@ function render_player( array $tracks, array $options ): string {
 		<div class="jtpp-fallback" hidden></div>
 		<div class="jtpp-times"><span class="jtpp-time-current">0:00</span><span class="jtpp-time-total">0:00</span></div>
 		<div class="jtpp-loop-tools" hidden>
-			<button type="button" class="jtpp-loop-clear"><?php esc_html_e( 'Clear selection', 'jt-practice-player' ); ?></button>
-			<div class="jtpp-zoom-controls" aria-label="<?php esc_attr_e( 'Selection zoom controls', 'jt-practice-player' ); ?>">
-				<button type="button" class="jtpp-zoom-out" aria-label="<?php esc_attr_e( 'Zoom out', 'jt-practice-player' ); ?>">&minus;</button>
-				<button type="button" class="jtpp-zoom-reset" aria-label="<?php esc_attr_e( 'Reset selection zoom', 'jt-practice-player' ); ?>"><?php esc_html_e( 'Fit loop', 'jt-practice-player' ); ?></button>
-				<button type="button" class="jtpp-zoom-in" aria-label="<?php esc_attr_e( 'Zoom in', 'jt-practice-player' ); ?>">+</button>
+			<div class="jtpp-loop-current" hidden>
+				<input type="text" class="jtpp-loop-name" value="" placeholder="<?php esc_attr_e( 'Section name', 'jt-practice-player' ); ?>" aria-label="<?php esc_attr_e( 'Saved section name', 'jt-practice-player' ); ?>" />
+				<button type="button" class="jtpp-loop-save"><?php esc_html_e( 'Save loop', 'jt-practice-player' ); ?></button>
+				<button type="button" class="jtpp-loop-clear"><?php esc_html_e( 'Clear selection', 'jt-practice-player' ); ?></button>
+				<div class="jtpp-zoom-controls" aria-label="<?php esc_attr_e( 'Selection zoom controls', 'jt-practice-player' ); ?>">
+					<button type="button" class="jtpp-zoom-out" aria-label="<?php esc_attr_e( 'Zoom out', 'jt-practice-player' ); ?>">&minus;</button>
+					<button type="button" class="jtpp-zoom-reset" aria-label="<?php esc_attr_e( 'Reset selection zoom', 'jt-practice-player' ); ?>"><?php esc_html_e( 'Fit loop', 'jt-practice-player' ); ?></button>
+					<button type="button" class="jtpp-zoom-in" aria-label="<?php esc_attr_e( 'Zoom in', 'jt-practice-player' ); ?>">+</button>
+				</div>
+			</div>
+			<div class="jtpp-loop-saved" hidden>
+				<select class="jtpp-loop-saved-select" aria-label="<?php esc_attr_e( 'Saved loop sections', 'jt-practice-player' ); ?>">
+					<option value=""><?php esc_html_e( 'Saved sections', 'jt-practice-player' ); ?></option>
+				</select>
+				<button type="button" class="jtpp-loop-delete"><?php esc_html_e( 'Delete saved', 'jt-practice-player' ); ?></button>
 			</div>
 		</div>
 		<div class="jtpp-controls">

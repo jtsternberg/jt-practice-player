@@ -89,11 +89,14 @@ const PreviewRow = memo( function PreviewRow( {
 } ) {
 	const isExternal = ! track.id;
 	const attachment = useSelect(
-		( select ) => ( track.id ? select( 'core' ).getMedia( track.id ) : null ),
+		( select ) =>
+			track.id ? select( 'core' ).getMedia( track.id ) : null,
 		[ track.id ]
 	);
 	const title = isExternal
-		? track.title || track.url || __( 'External audio', 'jt-practice-player' )
+		? track.title ||
+		  track.url ||
+		  __( 'External audio', 'jt-practice-player' )
 		: track.customTitle ||
 		  attachment?.title?.rendered ||
 		  __( '(loading…)', 'jt-practice-player' );
@@ -125,7 +128,10 @@ const PreviewRow = memo( function PreviewRow( {
 			<button
 				type="button"
 				className="jtpp-drag-handle"
-				aria-label={ __( 'Drag to reorder track', 'jt-practice-player' ) }
+				aria-label={ __(
+					'Drag to reorder track',
+					'jt-practice-player'
+				) }
 				onPointerDown={ ( event ) => startDrag( event, index, title ) }
 			>
 				{ dragHandle.props ? (
@@ -165,17 +171,11 @@ const PreviewRow = memo( function PreviewRow( {
 } );
 
 // Sidebar editor for whichever track is selected in the preview.
-function TrackSettings( {
-	track,
-	index,
-	count,
-	setField,
-	onRemove,
-	onMove,
-} ) {
+function TrackSettings( { track, index, count, setField, onRemove, onMove } ) {
 	const isExternal = ! track.id;
 	const attachment = useSelect(
-		( select ) => ( track.id ? select( 'core' ).getMedia( track.id ) : null ),
+		( select ) =>
+			track.id ? select( 'core' ).getMedia( track.id ) : null,
 		[ track.id ]
 	);
 	return (
@@ -561,10 +561,7 @@ export default function Edit( { attributes, setAttributes, clientId } ) {
 						variant="tertiary"
 						onClick={ addExternal }
 					>
-						{ __(
-							'Add external URL track',
-							'jt-practice-player'
-						) }
+						{ __( 'Add external URL track', 'jt-practice-player' ) }
 					</Button>
 				</>
 			) : (

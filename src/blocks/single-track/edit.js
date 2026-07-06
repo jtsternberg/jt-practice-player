@@ -61,8 +61,139 @@ export default function Edit( { attributes, setAttributes } ) {
 	);
 
 	// Explicit choice wins; otherwise infer from existing data.
-	const activeSource =
-		source || ( id ? 'media' : externalUrl ? 'external' : 'media' );
+	let activeSource = 'media';
+	if ( source ) {
+		activeSource = source;
+	} else if ( ! id && externalUrl ) {
+		activeSource = 'external';
+	}
+
+	let trackEditor;
+	if ( activeSource === 'media' && ! id ) {
+		trackEditor = (
+			<MediaPlaceholder
+				allowedTypes={ [ 'audio' ] }
+				labels={ {
+					title: __( 'Practice Track', 'jt-practice-player' ),
+				} }
+				onSelect={ ( media ) => setAttributes( { id: media.id } ) }
+			/>
+		);
+	} else if ( activeSource === 'media' ) {
+		trackEditor = (
+			<div className="jtpp-editor-track">
+				<div className="jtpp-editor-track__fields">
+					<DebouncedText
+						label={ __( 'Track title', 'jt-practice-player' ) }
+						__nextHasNoMarginBottom
+						value={ customTitle }
+						placeholder={
+							attachment?.title?.rendered ||
+							__( 'Loading…', 'jt-practice-player' )
+						}
+						onChange={ ( v ) =>
+							setAttributes( { customTitle: v } )
+						}
+					/>
+					<Button
+						variant="secondary"
+						onClick={ () =>
+							setAttributes( { id: 0, customTitle: '' } )
+						}
+					>
+						{ __( 'Replace audio file', 'jt-practice-player' ) }
+					</Button>
+				</div>
+			</div>
+		);
+	} else {
+		trackEditor = (
+			<div className="jtpp-editor-track jtpp-editor-track--external">
+				<div className="jtpp-editor-track__fields">
+					<DebouncedText
+						type="url"
+						label={ __( 'Audio URL', 'jt-practice-player' ) }
+						__nextHasNoMarginBottom
+						value={ externalUrl }
+						placeholder="https://…"
+						onChange={ ( v ) =>
+							setAttributes( { externalUrl: v } )
+						}
+						help={
+							urlLooksInvalid( externalUrl )
+								? __(
+										'This doesn’t look like a valid URL.',
+										'jt-practice-player'
+								  )
+								: undefined
+						}
+					/>
+					{ externalUrl && isCrossOrigin( externalUrl ) && (
+						<Notice status="warning" isDismissible={ false }>
+							{ __(
+								'Waveform loading depends on the remote host allowing browser audio fetches. If not, the player falls back to native audio controls.',
+								'jt-practice-player'
+							) }
+						</Notice>
+					) }
+					<DebouncedText
+						label={ __( 'Title', 'jt-practice-player' ) }
+						__nextHasNoMarginBottom
+						value={ externalTitle }
+						placeholder={ __( 'Song title', 'jt-practice-player' ) }
+						onChange={ ( v ) =>
+							setAttributes( { externalTitle: v } )
+						}
+					/>
+					<div className="jtpp-editor-track__meta">
+						<DebouncedText
+							label={ __( 'Artist', 'jt-practice-player' ) }
+							__nextHasNoMarginBottom
+							value={ externalArtist }
+							onChange={ ( v ) =>
+								setAttributes( { externalArtist: v } )
+							}
+						/>
+						<DebouncedText
+							label={ __( 'Album', 'jt-practice-player' ) }
+							__nextHasNoMarginBottom
+							value={ externalAlbum }
+							onChange={ ( v ) =>
+								setAttributes( { externalAlbum: v } )
+							}
+						/>
+						<DebouncedText
+							label={ __( 'Duration', 'jt-practice-player' ) }
+							__nextHasNoMarginBottom
+							value={ externalDuration }
+							placeholder="3:42"
+							onChange={ ( v ) =>
+								setAttributes( { externalDuration: v } )
+							}
+						/>
+					</div>
+					<DebouncedText
+						type="url"
+						label={ __( 'Artwork URL', 'jt-practice-player' ) }
+						__nextHasNoMarginBottom
+						value={ externalArtwork }
+						placeholder="https://…"
+						onChange={ ( v ) =>
+							setAttributes( { externalArtwork: v } )
+						}
+						help={
+							urlLooksInvalid( externalArtwork )
+								? __(
+										'This doesn’t look like a valid URL.',
+										'jt-practice-player'
+								  )
+								: undefined
+						}
+					/>
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div { ...useBlockProps( { className: 'jtpp-editor' } ) }>
@@ -147,144 +278,7 @@ export default function Edit( { attributes, setAttributes } ) {
 				</Button>
 			</ButtonGroup>
 
-			{ activeSource === 'media' ? (
-				! id ? (
-					<MediaPlaceholder
-						allowedTypes={ [ 'audio' ] }
-						labels={ {
-							title: __(
-								'Practice Track',
-								'jt-practice-player'
-							),
-						} }
-						onSelect={ ( media ) =>
-							setAttributes( { id: media.id } )
-						}
-					/>
-				) : (
-					<div className="jtpp-editor-track">
-						<div className="jtpp-editor-track__fields">
-							<DebouncedText
-								label={ __(
-									'Track title',
-									'jt-practice-player'
-								) }
-								__nextHasNoMarginBottom
-								value={ customTitle }
-								placeholder={
-									attachment?.title?.rendered ||
-									__( 'Loading…', 'jt-practice-player' )
-								}
-								onChange={ ( v ) =>
-									setAttributes( { customTitle: v } )
-								}
-							/>
-							<Button
-								variant="secondary"
-								onClick={ () =>
-									setAttributes( { id: 0, customTitle: '' } )
-								}
-							>
-								{ __(
-									'Replace audio file',
-									'jt-practice-player'
-								) }
-							</Button>
-						</div>
-					</div>
-				)
-			) : (
-				<div className="jtpp-editor-track jtpp-editor-track--external">
-					<div className="jtpp-editor-track__fields">
-						<DebouncedText
-							type="url"
-							label={ __( 'Audio URL', 'jt-practice-player' ) }
-							__nextHasNoMarginBottom
-							value={ externalUrl }
-							placeholder="https://…"
-							onChange={ ( v ) =>
-								setAttributes( { externalUrl: v } )
-							}
-							help={
-								urlLooksInvalid( externalUrl )
-									? __(
-											'This doesn’t look like a valid URL.',
-											'jt-practice-player'
-									  )
-									: undefined
-							}
-						/>
-						{ externalUrl && isCrossOrigin( externalUrl ) && (
-							<Notice status="warning" isDismissible={ false }>
-								{ __(
-									'Waveform loading depends on the remote host allowing browser audio fetches. If not, the player falls back to native audio controls.',
-									'jt-practice-player'
-								) }
-							</Notice>
-						) }
-						<DebouncedText
-							label={ __( 'Title', 'jt-practice-player' ) }
-							__nextHasNoMarginBottom
-							value={ externalTitle }
-							placeholder={ __(
-								'Song title',
-								'jt-practice-player'
-							) }
-							onChange={ ( v ) =>
-								setAttributes( { externalTitle: v } )
-							}
-						/>
-						<div className="jtpp-editor-track__meta">
-							<DebouncedText
-								label={ __( 'Artist', 'jt-practice-player' ) }
-								__nextHasNoMarginBottom
-								value={ externalArtist }
-								onChange={ ( v ) =>
-									setAttributes( { externalArtist: v } )
-								}
-							/>
-							<DebouncedText
-								label={ __( 'Album', 'jt-practice-player' ) }
-								__nextHasNoMarginBottom
-								value={ externalAlbum }
-								onChange={ ( v ) =>
-									setAttributes( { externalAlbum: v } )
-								}
-							/>
-							<DebouncedText
-								label={ __(
-									'Duration',
-									'jt-practice-player'
-								) }
-								__nextHasNoMarginBottom
-								value={ externalDuration }
-								placeholder="3:42"
-								onChange={ ( v ) =>
-									setAttributes( { externalDuration: v } )
-								}
-							/>
-						</div>
-						<DebouncedText
-							type="url"
-							label={ __( 'Artwork URL', 'jt-practice-player' ) }
-							__nextHasNoMarginBottom
-							value={ externalArtwork }
-							placeholder="https://…"
-							onChange={ ( v ) =>
-								setAttributes( { externalArtwork: v } )
-							}
-							help={
-								urlLooksInvalid( externalArtwork )
-									? __(
-											'This doesn’t look like a valid URL.',
-											'jt-practice-player'
-									  )
-									: undefined
-							}
-						/>
-					</div>
-				</div>
-			) }
+			{ trackEditor }
 		</div>
 	);
 }

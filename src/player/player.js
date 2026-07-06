@@ -211,7 +211,6 @@ export class PracticePlayer {
 		this.currentTimeEl = this.rootEl.querySelector( '.jtpp-time-current' );
 		this.totalTimeEl = this.rootEl.querySelector( '.jtpp-time-total' );
 		this.playButton = this.rootEl.querySelector( '.jtpp-play' );
-		this.loopButton = this.rootEl.querySelector( '.jtpp-loop' );
 		this.repeatButton = this.rootEl.querySelector( '.jtpp-repeat' );
 		this.randomButton = this.rootEl.querySelector( '.jtpp-random' );
 		this.fullscreenButton = this.rootEl.querySelector( '.jtpp-fullscreen' );
@@ -226,7 +225,6 @@ export class PracticePlayer {
 
 	bindControls() {
 		this.playButton?.addEventListener( 'click', () => this.togglePlay() );
-		this.loopButton?.addEventListener( 'click', () => this.toggleLoop() );
 		this.repeatButton?.addEventListener( 'click', () =>
 			this.toggleRepeatMode()
 		);
@@ -573,7 +571,7 @@ export class PracticePlayer {
 		this.loop = { start: region.start, end: region.end, on: true };
 		this.seekLoopStart();
 		this.focusLoopZoom();
-		this.reflectLoop();
+		this.reflectLoopTools();
 		this.scheduleSave();
 		this.requestStickyUpdate();
 	}
@@ -589,7 +587,7 @@ export class PracticePlayer {
 		};
 		this.seekLoopStart();
 		this.focusLoopZoom();
-		this.reflectLoop();
+		this.reflectLoopTools();
 		this.scheduleSave();
 		this.requestStickyUpdate();
 	}
@@ -601,7 +599,7 @@ export class PracticePlayer {
 		this.region = null;
 		this.loop = null;
 		this.resetZoom();
-		this.reflectLoop();
+		this.reflectLoopTools();
 		this.scheduleSave();
 		this.requestStickyUpdate();
 	}
@@ -709,7 +707,7 @@ export class PracticePlayer {
 			this.loop = {
 				start: state.loopStart,
 				end: state.loopEnd,
-				on: Boolean( state.loopOn ),
+				on: true,
 			};
 			this.attachRegionClear( this.region );
 		}
@@ -725,7 +723,7 @@ export class PracticePlayer {
 			);
 			this.focusLoopZoom();
 		}
-		this.reflectLoop();
+		this.reflectLoopTools();
 		this.requestStickyUpdate();
 	}
 
@@ -792,19 +790,6 @@ export class PracticePlayer {
 
 	pause() {
 		this.waveSurfer?.pause();
-	}
-
-	toggleLoop() {
-		if ( ! this.loop || ! this.region ) {
-			return;
-		}
-		const shouldLoop = ! this.loop.on;
-		this.loop = { ...this.loop, on: shouldLoop };
-		if ( shouldLoop ) {
-			this.seekLoopStart();
-		}
-		this.reflectLoop();
-		this.scheduleSave();
 	}
 
 	toggleRepeatMode() {
@@ -950,13 +935,7 @@ export class PracticePlayer {
 		this.waveSurfer.setScroll( 0 );
 	}
 
-	reflectLoop() {
-		const active = Boolean( this.loop?.on && this.region );
-		this.loopButton?.classList.toggle( 'is-active', active );
-		this.loopButton?.setAttribute(
-			'aria-pressed',
-			active ? 'true' : 'false'
-		);
+	reflectLoopTools() {
 		if ( this.loopToolsEl ) {
 			this.loopToolsEl.hidden = ! Boolean( this.loop && this.region );
 		}
@@ -1128,8 +1107,6 @@ export class PracticePlayer {
 
 		const handlers = {
 			' ': () => this.togglePlay(),
-			l: () => this.toggleLoop(),
-			L: () => this.toggleLoop(),
 			ArrowLeft: () => this.skip( event.shiftKey ? -15 : -5 ),
 			ArrowRight: () => this.skip( event.shiftKey ? 15 : 5 ),
 			Home: () => this.seekStart(),
@@ -1167,7 +1144,6 @@ export class PracticePlayer {
 		saveTrackState( this.currentTrack().id, {
 			loopStart: this.loop?.start,
 			loopEnd: this.loop?.end,
-			loopOn: Boolean( this.loop?.on ),
 			rate: this.waveSurfer.getPlaybackRate?.() || 1,
 		} );
 		saveVolume( this.volume );

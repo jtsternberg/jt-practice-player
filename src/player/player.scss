@@ -535,12 +535,6 @@
 	background: var(--jtpp-accent) !important;
 }
 
-.jtpp .jtpp-controls .jtpp-loop.is-active {
-	color: color-mix(in srgb, currentcolor 82%, #000) !important;
-	border-color: color-mix(in srgb, var(--jtpp-loop) 72%, transparent) !important;
-	background: var(--jtpp-loop-active) !important;
-}
-
 .jtpp .jtpp-controls .jtpp-random.is-active,
 .jtpp .jtpp-controls .jtpp-repeat.is-track-repeat {
 	color: #fff !important;

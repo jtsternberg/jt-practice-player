@@ -175,7 +175,6 @@ function render_player( array $tracks, array $options ): string {
 			<?php if ( $options['playlist'] ) : ?><button type="button" class="jtpp-next" aria-label="<?php esc_attr_e( 'Next track', 'jt-practice-player' ); ?>"><?php echo icon( 'next' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button><?php endif; ?>
 			<?php if ( $options['playlist'] ) : ?><button type="button" class="jtpp-random" aria-label="<?php esc_attr_e( 'Random order', 'jt-practice-player' ); ?>" aria-pressed="false"><?php echo icon( 'shuffle' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button><?php endif; ?>
 			<?php if ( $options['playlist'] ) : ?><button type="button" class="jtpp-repeat" aria-label="<?php esc_attr_e( 'Repeat whole playlist', 'jt-practice-player' ); ?>"><?php echo icon( 'repeat' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button><?php endif; ?>
-			<button type="button" class="jtpp-loop" aria-label="<?php esc_attr_e( 'Toggle section loop', 'jt-practice-player' ); ?>" aria-pressed="false"><?php echo icon( 'loop' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button>
 			<?php if ( ! empty( $options['fullscreen'] ) ) : ?><button type="button" class="jtpp-fullscreen" aria-label="<?php esc_attr_e( 'Enter fullscreen', 'jt-practice-player' ); ?>" aria-pressed="false"><?php echo icon( 'fullscreen' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button><?php endif; ?>
 			<?php if ( $options['speed'] ) : ?>
 			<select class="jtpp-speed" aria-label="<?php esc_attr_e( 'Playback speed', 'jt-practice-player' ); ?>">
@@ -217,8 +216,6 @@ function icon( string $name ): string {
 			return '<svg aria-hidden="true" focusable="false" viewBox="0 0 32 32" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7H6V1"></path><path d="M6.6 7.4a12 12 0 1 1-1.2 15.2"></path><text x="16" y="20" text-anchor="middle" font-size="9" font-weight="700" stroke-width="0" fill="currentColor">15</text></svg>';
 		case 'fwd15':
 			return '<svg aria-hidden="true" focusable="false" viewBox="0 0 32 32" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h6V1"></path><path d="M25.4 7.4a12 12 0 1 0 1.2 15.2"></path><text x="16" y="20" text-anchor="middle" font-size="9" font-weight="700" stroke-width="0" fill="currentColor">15</text></svg>';
-		case 'loop':
-			return '<svg' . $attrs . '><path d="M17 2l4 4-4 4"></path><path d="M3 11V9a3 3 0 0 1 3-3h15"></path><path d="M7 22l-4-4 4-4"></path><path d="M21 13v2a3 3 0 0 1-3 3H3"></path></svg>';
 		case 'repeat':
 			return '<svg' . $attrs . '><path d="M17 2l4 4-4 4"></path><path d="M3 11V9a3 3 0 0 1 3-3h18"></path><path d="M7 22l-4-4 4-4"></path><path d="M21 13v2a3 3 0 0 1-3 3H3"></path></svg>';
 		case 'shuffle':

@@ -69,6 +69,16 @@ function bindGlobalKeyboard() {
 		if ( targetAcceptsText( event.target ) ) {
 			return;
 		}
+		// Only claim keyboard shortcuts (arrows, space, etc.) when focus is
+		// actually inside the player; otherwise let the key do its normal thing
+		// (e.g. arrow keys scroll the page). Hardware media keys still work via
+		// the Media Session API bound separately.
+		const focusInPlayer =
+			activePlayer.rootEl.contains( event.target ) ||
+			activePlayer.rootEl.contains( event.target?.ownerDocument?.activeElement );
+		if ( ! focusInPlayer ) {
+			return;
+		}
 		activePlayer.onKeyDown( event );
 	} );
 	bindMediaSession();

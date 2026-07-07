@@ -4,3 +4,8 @@
 *.db
 .beads-credential-key
 .beads/proxieddb/
+
+# Local environment overrides.
+.env
+.env.*
+!.env.example

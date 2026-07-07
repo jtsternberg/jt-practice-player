@@ -44,13 +44,7 @@ export function loadSavedLoops( trackId, storage = defaultStorage() ) {
 		const raw =
 			storage && storage.getItem( `${ PREFIX }loops:${ trackId }` );
 		const parsed = raw ? JSON.parse( raw ) : null;
-		if ( ! Array.isArray( parsed ) ) {
-			return [];
-		}
-		return parsed
-			.map( normalizeSavedLoop )
-			.filter( Boolean )
-			.sort( ( a, b ) => ( b.updatedAt || 0 ) - ( a.updatedAt || 0 ) );
+		return normalizeSavedLoops( parsed );
 	} catch {
 		return [];
 	}
@@ -60,11 +54,72 @@ export function saveSavedLoops( trackId, loops, storage = defaultStorage() ) {
 	try {
 		storage.setItem(
 			`${ PREFIX }loops:${ trackId }`,
-			JSON.stringify( loops.map( normalizeSavedLoop ).filter( Boolean ) )
+			JSON.stringify( normalizeSavedLoops( loops ) )
 		);
 	} catch {
 		// Persistence is best-effort.
 	}
+}
+
+export function loadSavedLoopsMap( trackIds, storage = defaultStorage() ) {
+	return Object.fromEntries(
+		trackIds
+			.map( ( trackId ) => [
+				trackId,
+				loadSavedLoops( trackId, storage ),
+			] )
+			.filter( ( [ , loops ] ) => loops.length > 0 )
+	);
+}
+
+export function saveSavedLoopsMap( loopsByTrack, storage = defaultStorage() ) {
+	Object.entries( loopsByTrack || {} ).forEach( ( [ trackId, loops ] ) => {
+		saveSavedLoops( trackId, loops, storage );
+	} );
+}
+
+export function normalizeSavedLoops( loops ) {
+	if ( ! Array.isArray( loops ) ) {
+		return [];
+	}
+	return loops
+		.map( normalizeSavedLoop )
+		.filter( Boolean )
+		.sort( ( a, b ) => ( b.updatedAt || 0 ) - ( a.updatedAt || 0 ) );
+}
+
+export function mergeSavedLoops( primary, secondary, limit = 20 ) {
+	const byName = new Map();
+	[ ...normalizeSavedLoops( primary ), ...normalizeSavedLoops( secondary ) ]
+		.sort( ( a, b ) => ( b.updatedAt || 0 ) - ( a.updatedAt || 0 ) )
+		.forEach( ( loop ) => {
+			const key = loop.name.toLowerCase();
+			if ( ! byName.has( key ) ) {
+				byName.set( key, loop );
+			}
+		} );
+	return [ ...byName.values() ]
+		.sort( ( a, b ) => ( b.updatedAt || 0 ) - ( a.updatedAt || 0 ) )
+		.slice( 0, limit );
+}
+
+export function mergeSavedLoopMaps( primary, secondary, limit = 20 ) {
+	const trackIds = new Set( [
+		...Object.keys( primary || {} ),
+		...Object.keys( secondary || {} ),
+	] );
+	return Object.fromEntries(
+		[ ...trackIds ]
+			.map( ( trackId ) => [
+				trackId,
+				mergeSavedLoops(
+					primary?.[ trackId ],
+					secondary?.[ trackId ],
+					limit
+				),
+			] )
+			.filter( ( [ , loops ] ) => loops.length > 0 )
+	);
 }
 
 export function loadQueue( trackIds, storage = defaultStorage() ) {
@@ -139,7 +194,7 @@ export function saveVolume( volume, storage = defaultStorage() ) {
 	}
 }
 
-function normalizeSavedLoop( loop ) {
+export function normalizeSavedLoop( loop ) {
 	if ( ! loop || typeof loop !== 'object' ) {
 		return null;
 	}

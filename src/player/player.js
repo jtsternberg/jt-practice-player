@@ -11,8 +11,10 @@ import {
 import {
 	loadTrackState,
 	saveTrackState,
-	loadSavedLoops,
+	loadSavedLoopsMap,
 	saveSavedLoops,
+	saveSavedLoopsMap,
+	mergeSavedLoopMaps,
 	loadQueue,
 	saveQueue,
 	loadOrder,
@@ -129,7 +131,9 @@ export class PracticePlayer {
 		this.data = this.readData();
 		this.tracks = this.normalizeTrackUrls( this.data.tracks || [] );
 		this.options = this.data.options || {};
+		this.userLoopCues = this.data.userLoopCues || null;
 		this.storageTrackIds = this.tracks.map( ( track ) => track.id );
+		this.savedLoopsByTrack = loadSavedLoopsMap( this.storageTrackIds );
 		this.activeIndex = 0;
 		this.dragIndex = null;
 		this.loop = null;
@@ -157,6 +161,7 @@ export class PracticePlayer {
 		this.bindStickyPlayer();
 		this.restoreQueue();
 		this.loadTrack( 0, false );
+		this.hydrateUserSavedLoops();
 		PLAYERS.add( this );
 		activePlayer = activePlayer || this;
 		bindGlobalKeyboard();
@@ -1015,11 +1020,11 @@ export class PracticePlayer {
 		};
 		const loops = [
 			savedLoop,
-			...loadSavedLoops( trackId ).filter(
+			...this.getSavedLoops( trackId ).filter(
 				( loop ) => loop.name.toLowerCase() !== name.toLowerCase()
 			),
 		].slice( 0, SAVED_LOOP_LIMIT );
-		saveSavedLoops( trackId, loops );
+		this.setSavedLoops( trackId, loops );
 		if ( this.loopNameInput ) {
 			this.loopNameInput.value = '';
 		}
@@ -1057,7 +1062,7 @@ export class PracticePlayer {
 			this.reflectLoopTools();
 			return;
 		}
-		const savedLoop = loadSavedLoops( this.currentTrack().id ).find(
+		const savedLoop = this.getSavedLoops( this.currentTrack().id ).find(
 			( loop ) => loop.id === id
 		);
 		if ( ! savedLoop ) {
@@ -1094,11 +1099,97 @@ export class PracticePlayer {
 			return;
 		}
 		const trackId = this.currentTrack().id;
-		const loops = loadSavedLoops( trackId ).filter(
+		const loops = this.getSavedLoops( trackId ).filter(
 			( loop ) => loop.id !== id
 		);
-		saveSavedLoops( trackId, loops );
+		this.setSavedLoops( trackId, loops );
 		this.reflectLoopTools();
+	}
+
+	getSavedLoops( trackId ) {
+		return this.savedLoopsByTrack?.[ trackId ] || [];
+	}
+
+	setSavedLoops( trackId, loops ) {
+		this.savedLoopsByTrack = {
+			...this.savedLoopsByTrack,
+			[ trackId ]: loops,
+		};
+		if ( ! loops.length ) {
+			delete this.savedLoopsByTrack[ trackId ];
+		}
+		saveSavedLoops( trackId, loops );
+		this.saveUserSavedLoops();
+	}
+
+	async hydrateUserSavedLoops() {
+		if ( ! this.userLoopCues?.restUrl || ! this.userLoopCues?.nonce ) {
+			return;
+		}
+		try {
+			const response = await window.fetch( this.userLoopCues.restUrl, {
+				credentials: 'same-origin',
+				headers: {
+					'X-WP-Nonce': this.userLoopCues.nonce,
+				},
+			} );
+			if ( ! response.ok ) {
+				return;
+			}
+			const data = await response.json();
+			const localLoops = this.savedLoopsByTrack;
+			const remoteLoops = mergeSavedLoopMaps(
+				data?.cues || {},
+				{},
+				SAVED_LOOP_LIMIT
+			);
+			const mergedLoops = mergeSavedLoopMaps(
+				remoteLoops,
+				localLoops,
+				SAVED_LOOP_LIMIT
+			);
+			this.savedLoopsByTrack = mergedLoops;
+			saveSavedLoopsMap( this.savedLoopsByTrack );
+			this.reflectLoopTools();
+			const hasLocalChanges =
+				JSON.stringify( mergedLoops ) !== JSON.stringify( remoteLoops );
+			if ( hasLocalChanges ) {
+				this.saveUserSavedLoops();
+			}
+		} catch {
+			// User-meta cue sync is best-effort; localStorage remains usable.
+		}
+	}
+
+	async saveUserSavedLoops() {
+		if ( ! this.userLoopCues?.restUrl || ! this.userLoopCues?.nonce ) {
+			return;
+		}
+		try {
+			const response = await window.fetch( this.userLoopCues.restUrl, {
+				method: 'POST',
+				credentials: 'same-origin',
+				headers: {
+					'Content-Type': 'application/json',
+					'X-WP-Nonce': this.userLoopCues.nonce,
+				},
+				body: JSON.stringify( {
+					cues: this.savedLoopsByTrack,
+				} ),
+			} );
+			if ( response.ok ) {
+				const data = await response.json();
+				this.savedLoopsByTrack = mergeSavedLoopMaps(
+					data?.cues || {},
+					{},
+					SAVED_LOOP_LIMIT
+				);
+				saveSavedLoopsMap( this.savedLoopsByTrack );
+				this.reflectLoopTools();
+			}
+		} catch {
+			// Keep the local copy if the network or nonce fails.
+		}
 	}
 
 	seekLoopStart() {
@@ -1206,7 +1297,7 @@ export class PracticePlayer {
 	reflectLoopTools( selectedSavedLoop = '' ) {
 		const hasSelection = Boolean( this.loop && this.region );
 		const savedLoops = this.currentTrack()
-			? loadSavedLoops( this.currentTrack().id )
+			? this.getSavedLoops( this.currentTrack().id )
 			: [];
 		if ( this.loopToolsEl ) {
 			this.loopToolsEl.hidden = ! hasSelection && savedLoops.length === 0;

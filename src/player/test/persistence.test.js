@@ -3,6 +3,10 @@ import {
 	saveTrackState,
 	loadSavedLoops,
 	saveSavedLoops,
+	loadSavedLoopsMap,
+	saveSavedLoopsMap,
+	mergeSavedLoops,
+	mergeSavedLoopMaps,
 	loadQueue,
 	saveQueue,
 	loadOrder,
@@ -127,6 +131,101 @@ describe( 'persistence', () => {
 				rate: 1.25,
 			} ),
 		] );
+	} );
+	it( 'loads and saves saved loop maps by track', () => {
+		const s = memoryStorage();
+		saveSavedLoopsMap(
+			{
+				1: [ { id: 'a', name: 'Verse', start: 4, end: 8 } ],
+				'url:1234abcd5678ef90': [
+					{ id: 'b', name: 'Chorus', start: 12, end: 16 },
+				],
+			},
+			s
+		);
+		expect(
+			loadSavedLoopsMap( [ 1, 'url:1234abcd5678ef90', 3 ], s )
+		).toEqual( {
+			1: [ expect.objectContaining( { id: 'a', name: 'Verse' } ) ],
+			'url:1234abcd5678ef90': [
+				expect.objectContaining( { id: 'b', name: 'Chorus' } ),
+			],
+		} );
+	} );
+	it( 'merges saved loop sections by name without duplicates', () => {
+		expect(
+			mergeSavedLoops(
+				[
+					{
+						id: 'remote-old',
+						name: 'Verse',
+						start: 1,
+						end: 2,
+						updatedAt: 100,
+					},
+					{
+						id: 'remote-only',
+						name: 'Bridge',
+						start: 3,
+						end: 4,
+						updatedAt: 300,
+					},
+				],
+				[
+					{
+						id: 'local-new',
+						name: 'verse',
+						start: 5,
+						end: 6,
+						updatedAt: 200,
+					},
+				]
+			)
+		).toEqual( [
+			expect.objectContaining( { id: 'remote-only', name: 'Bridge' } ),
+			expect.objectContaining( { id: 'local-new', name: 'verse' } ),
+		] );
+	} );
+	it( 'merges saved loop maps per track', () => {
+		expect(
+			mergeSavedLoopMaps(
+				{
+					1: [
+						{
+							id: 'remote',
+							name: 'Verse',
+							start: 1,
+							end: 2,
+							updatedAt: 100,
+						},
+					],
+				},
+				{
+					1: [
+						{
+							id: 'local',
+							name: 'Verse',
+							start: 2,
+							end: 3,
+							updatedAt: 200,
+						},
+					],
+					'url:1234abcd5678ef90': [
+						{
+							id: 'external',
+							name: 'Solo',
+							start: 9,
+							end: 12,
+						},
+					],
+				}
+			)
+		).toEqual( {
+			1: [ expect.objectContaining( { id: 'local' } ) ],
+			'url:1234abcd5678ef90': [
+				expect.objectContaining( { id: 'external' } ),
+			],
+		} );
 	} );
 	it( 'defaults the queue to all tracks', () => {
 		expect( loadQueue( [ 1, 2, 3 ], memoryStorage() ) ).toEqual( [

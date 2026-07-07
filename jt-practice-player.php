@@ -15,8 +15,11 @@ namespace JTPP;
 defined( 'ABSPATH' ) || exit;
 
 const JTPP_VERSION = '0.1.0';
+const USER_LOOP_CUES_META_KEY = 'jtpp_saved_loop_cues';
+const USER_LOOP_CUES_LIMIT    = 20;
 
 add_action( 'init', __NAMESPACE__ . '\\register' );
+add_action( 'rest_api_init', __NAMESPACE__ . '\\register_rest_routes' );
 function register() {
 	$dir = plugin_dir_path( __FILE__ );
 	$url = plugin_dir_url( __FILE__ );
@@ -128,7 +131,14 @@ function render_player( array $tracks, array $options ): string {
 	wp_enqueue_script( 'jtpp-view' );
 	wp_enqueue_style( 'jtpp-player' );
 
-	$payload      = array( 'tracks' => $tracks, 'options' => $options );
+	$payload = array( 'tracks' => $tracks, 'options' => $options );
+	if ( is_user_logged_in() ) {
+		$payload['userLoopCues'] = array(
+			'restUrl' => esc_url_raw( rest_url( 'jtpp/v1/saved-loops' ) ),
+			'nonce'   => wp_create_nonce( 'wp_rest' ),
+		);
+	}
+
 	$loop_name_id = wp_unique_id( 'jtpp-loop-name-' );
 
 	ob_start();
@@ -229,6 +239,115 @@ function render_player( array $tracks, array $options ): string {
 	</noscript>
 	<?php
 	return ob_get_clean();
+}
+
+function register_rest_routes() {
+	register_rest_route(
+		'jtpp/v1',
+		'/saved-loops',
+		array(
+			array(
+				'methods'             => \WP_REST_Server::READABLE,
+				'callback'            => __NAMESPACE__ . '\\rest_get_saved_loops',
+				'permission_callback' => __NAMESPACE__ . '\\rest_current_user_can_manage_saved_loops',
+			),
+			array(
+				'methods'             => \WP_REST_Server::EDITABLE,
+				'callback'            => __NAMESPACE__ . '\\rest_update_saved_loops',
+				'permission_callback' => __NAMESPACE__ . '\\rest_current_user_can_manage_saved_loops',
+			),
+		)
+	);
+}
+
+function rest_current_user_can_manage_saved_loops(): bool {
+	return is_user_logged_in();
+}
+
+function rest_get_saved_loops(): \WP_REST_Response {
+	return rest_ensure_response(
+		array(
+			'cues' => get_current_user_loop_cues(),
+		)
+	);
+}
+
+function rest_update_saved_loops( \WP_REST_Request $request ): \WP_REST_Response {
+	$params = $request->get_json_params();
+	$cues   = normalize_user_loop_cues( $params['cues'] ?? array() );
+	update_user_meta( get_current_user_id(), USER_LOOP_CUES_META_KEY, $cues );
+
+	return rest_ensure_response(
+		array(
+			'cues' => $cues,
+		)
+	);
+}
+
+function get_current_user_loop_cues(): array {
+	$cues = get_user_meta( get_current_user_id(), USER_LOOP_CUES_META_KEY, true );
+	return normalize_user_loop_cues( is_array( $cues ) ? $cues : array() );
+}
+
+function normalize_user_loop_cues( array $cues ): array {
+	$normalized = array();
+	foreach ( $cues as $track_id => $loops ) {
+		$track_id = normalize_loop_track_id( $track_id );
+		if ( ! $track_id || ! is_array( $loops ) ) {
+			continue;
+		}
+		$track_loops = array_values( array_filter( array_map( __NAMESPACE__ . '\\normalize_user_loop_cue', $loops ) ) );
+		usort(
+			$track_loops,
+			static function ( array $a, array $b ): int {
+				return ( $b['updatedAt'] ?? 0 ) <=> ( $a['updatedAt'] ?? 0 );
+			}
+		);
+		if ( $track_loops ) {
+			$normalized[ $track_id ] = array_slice( $track_loops, 0, USER_LOOP_CUES_LIMIT );
+		}
+	}
+	return $normalized;
+}
+
+function normalize_loop_track_id( $track_id ): string {
+	$track_id = (string) $track_id;
+	if ( preg_match( '/^\d+$/', $track_id ) ) {
+		return (string) (int) $track_id;
+	}
+	if ( preg_match( '/^url:[a-f0-9]{16}$/', $track_id ) ) {
+		return $track_id;
+	}
+	return '';
+}
+
+function normalize_user_loop_cue( $loop ): ?array {
+	if ( ! is_array( $loop ) ) {
+		return null;
+	}
+	$start = isset( $loop['start'] ) ? (float) $loop['start'] : NAN;
+	$end   = isset( $loop['end'] ) ? (float) $loop['end'] : NAN;
+	if ( ! is_finite( $start ) || ! is_finite( $end ) || $end <= $start ) {
+		return null;
+	}
+
+	$name = trim( sanitize_text_field( $loop['name'] ?? '' ) );
+	$id   = trim( sanitize_text_field( $loop['id'] ?? '' ) );
+	$rate = isset( $loop['rate'] ) ? (float) $loop['rate'] : 1;
+
+	return array(
+		'id'        => $id ? $id : sanitize_key( $start . '-' . $end ),
+		'name'      => $name ? $name : format_storage_time( $start ) . '-' . format_storage_time( $end ),
+		'start'     => $start,
+		'end'       => $end,
+		'rate'      => is_finite( $rate ) ? $rate : 1,
+		'updatedAt' => isset( $loop['updatedAt'] ) ? (int) $loop['updatedAt'] : time() * 1000,
+	);
+}
+
+function format_storage_time( float $seconds ): string {
+	$safe = max( 0, (int) floor( $seconds ) );
+	return floor( $safe / 60 ) . ':' . str_pad( (string) ( $safe % 60 ), 2, '0', STR_PAD_LEFT );
 }
 
 function icon( string $name ): string {

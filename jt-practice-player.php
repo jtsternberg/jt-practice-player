@@ -30,6 +30,7 @@ add_action( 'save_post_' . TRACK_POST_TYPE, __NAMESPACE__ . '\\save_track_guid',
 add_action( 'rest_api_init', __NAMESPACE__ . '\\register_rest_routes' );
 if ( defined( 'WP_CLI' ) && WP_CLI ) {
 	\WP_CLI::add_command( 'jtpp migrate-tracks', __NAMESPACE__ . '\\CLI_Migrate_Tracks_Command' );
+	\WP_CLI::add_command( 'jtpp track', __NAMESPACE__ . '\\CLI_Track_Command' );
 }
 function register() {
 	$dir = plugin_dir_path( __FILE__ );
@@ -453,54 +454,136 @@ function rest_current_user_can_edit_tracks(): bool {
 
 function rest_search_tracks( \WP_REST_Request $request ): \WP_REST_Response {
 	$search = sanitize_text_field( $request->get_param( 'search' ) ?? '' );
-	$posts  = array();
-	$url    = sanitize_external_url( $search );
+
+	return rest_ensure_response(
+		array(
+			'tracks' => find_registry_tracks( $search, 10 ),
+		)
+	);
+}
+
+/**
+ * Search the registry, returning prepared track arrays. An exact URL match (if
+ * the search term is a URL) is surfaced first, then text-search results.
+ * Shared by REST search and the CLI `track list` command.
+ *
+ * @param string $search Search term or audio URL. Empty lists recent tracks.
+ * @param int    $limit  Max text-search results.
+ * @return array<int,array>
+ */
+function find_registry_tracks( string $search = '', int $limit = 20 ): array {
+	$posts   = array();
+	$exclude = array();
+	$url     = sanitize_external_url( $search );
 
 	if ( $url ) {
 		$track_id = find_registry_track_by_url( $url );
 		if ( $track_id ) {
 			$post = get_post( $track_id );
 			if ( $post ) {
-				$posts[] = $post;
+				$posts[]   = $post;
+				$exclude[] = $track_id;
 			}
 		}
 	}
 
-	$exclude = array_map(
-		static function ( $post ): int {
-			return (int) $post->ID;
-		},
-		$posts
-	);
 	$search_posts = get_posts(
 		array(
 			'post_type'      => TRACK_POST_TYPE,
 			'post_status'    => array( 'publish', 'draft' ),
-			'posts_per_page' => 10,
+			'posts_per_page' => $limit,
 			's'              => $search,
 			'post__not_in'   => $exclude,
+			'orderby'        => 'title',
+			'order'          => 'ASC',
 		)
 	);
 	$posts        = array_merge( $posts, $search_posts );
 
-	return rest_ensure_response(
+	return array_map( __NAMESPACE__ . '\\rest_prepare_track', $posts );
+}
+
+/**
+ * Best-effort count of published/draft posts whose content references the given
+ * track via a `"trackId":<id>` block attribute. Used to warn before deletion.
+ *
+ * @param int $track_id Track post ID.
+ * @return int
+ */
+function count_registry_track_references( int $track_id ): int {
+	if ( $track_id < 1 ) {
+		return 0;
+	}
+
+	$posts = get_posts(
 		array(
-			'tracks' => array_map( __NAMESPACE__ . '\\rest_prepare_track', $posts ),
+			'post_type'      => 'any',
+			'post_status'    => array( 'publish', 'draft', 'private', 'future' ),
+			'posts_per_page' => -1,
+			's'              => 'wp:jtpp/',
 		)
 	);
+
+	$count   = 0;
+	$pattern = '/"trackId"\s*:\s*' . $track_id . '\b/';
+	foreach ( $posts as $post ) {
+		if ( preg_match( $pattern, (string) $post->post_content ) ) {
+			$count++;
+		}
+	}
+
+	return $count;
 }
 
 function rest_get_track( \WP_REST_Request $request ) {
-	$post = get_post( (int) $request['id'] );
-	if ( ! $post || TRACK_POST_TYPE !== $post->post_type ) {
-		return new \WP_Error( 'jtpp_track_not_found', __( 'Track not found.', 'jt-practice-player' ), array( 'status' => 404 ) );
+	$track = get_registry_track( (int) $request['id'] );
+	if ( is_wp_error( $track ) ) {
+		return $track;
 	}
 
 	return rest_ensure_response(
 		array(
-			'track' => rest_prepare_track( $post ),
+			'track' => $track,
 		)
 	);
+}
+
+/**
+ * Fetch a single registry track's canonical fields, or WP_Error if the id is
+ * not a jtpp_track. Shared by REST reads and the CLI `track get` command.
+ *
+ * @param int $id Track post ID.
+ * @return array|\WP_Error
+ */
+function get_registry_track( int $id ) {
+	$post = get_post( $id );
+	if ( ! $post || TRACK_POST_TYPE !== $post->post_type ) {
+		return new \WP_Error( 'jtpp_track_not_found', __( 'Track not found.', 'jt-practice-player' ), array( 'status' => 404 ) );
+	}
+
+	return rest_prepare_track( $post );
+}
+
+/**
+ * Delete a registry track. Returns true on success or WP_Error if the id is not
+ * a jtpp_track or the deletion fails.
+ *
+ * @param int  $id    Track post ID.
+ * @param bool $force Skip trash and delete permanently.
+ * @return true|\WP_Error
+ */
+function delete_registry_track( int $id, bool $force = false ) {
+	$post = get_post( $id );
+	if ( ! $post || TRACK_POST_TYPE !== $post->post_type ) {
+		return new \WP_Error( 'jtpp_track_not_found', __( 'Track not found.', 'jt-practice-player' ), array( 'status' => 404 ) );
+	}
+
+	$deleted = wp_delete_post( $id, $force );
+	if ( ! $deleted ) {
+		return new \WP_Error( 'jtpp_track_delete_failed', __( 'Failed to delete track.', 'jt-practice-player' ), array( 'status' => 500 ) );
+	}
+
+	return true;
 }
 
 function rest_save_track( \WP_REST_Request $request ) {
@@ -551,6 +634,41 @@ function save_registry_track_from_fields( array $fields ) {
 	wp_set_object_terms( $saved_id, term_names_from_param( $fields['album'] ?? '' ), TRACK_ALBUM_TAXONOMY );
 
 	return $saved_id;
+}
+
+/**
+ * Apply a partial update to an existing registry track: fields present in
+ * $fields overwrite current values, everything else is preserved. Routes
+ * through save_registry_track_from_fields() so validation/guid rules match
+ * REST, editor, and migration writes.
+ *
+ * @param int   $id     Track post ID.
+ * @param array $fields Subset of title/url/artist/album/duration/artwork.
+ * @return int|\WP_Error Saved track ID or error.
+ */
+function apply_registry_track_updates( int $id, array $fields ) {
+	$current = get_registry_track( $id );
+	if ( is_wp_error( $current ) ) {
+		return $current;
+	}
+
+	$merged = array(
+		'trackId'  => $id,
+		'title'    => $current['title'],
+		'url'      => $current['url'],
+		'artist'   => $current['artist'],
+		'album'    => $current['album'],
+		'duration' => $current['duration'],
+		'artwork'  => $current['artwork'],
+	);
+
+	foreach ( array( 'title', 'url', 'artist', 'album', 'duration', 'artwork' ) as $key ) {
+		if ( array_key_exists( $key, $fields ) && null !== $fields[ $key ] ) {
+			$merged[ $key ] = $fields[ $key ];
+		}
+	}
+
+	return save_registry_track_from_fields( $merged );
 }
 
 function rest_prepare_track( $post ): array {
@@ -665,6 +783,279 @@ class CLI_Migrate_Tracks_Command {
 				$totals['skipped']
 			)
 		);
+	}
+}
+
+/**
+ * CRUD for central registry tracks (`jtpp_track`) from WP-CLI.
+ *
+ * All writes route through save_registry_track_from_fields()/apply_registry_track_updates()
+ * so the CLI, REST API, editor, and migration share identical validation,
+ * sanitization, and guid behavior. Changing a track's URL never changes its
+ * stored guid, so saved loops and player state survive re-transposes/URL swaps.
+ */
+class CLI_Track_Command {
+	private const FIELDS         = array( 'trackId', 'title', 'url', 'artist', 'album', 'duration', 'artwork', 'guid' );
+	private const DEFAULT_FIELDS = 'trackId,title,artist,album,duration,url';
+
+	/**
+	 * CLI flag => internal field name. Audio URL is exposed as `--audio-url`
+	 * because `--url` is a reserved WP-CLI global parameter (site selection).
+	 */
+	private const CLI_FIELD_MAP = array(
+		'title'     => 'title',
+		'audio-url' => 'url',
+		'artist'    => 'artist',
+		'album'     => 'album',
+		'duration'  => 'duration',
+		'artwork'   => 'artwork',
+	);
+
+	/**
+	 * Create a new registry track.
+	 *
+	 * ## OPTIONS
+	 *
+	 * --audio-url=<url>
+	 * : Audio URL. Required. (Named --audio-url because --url is reserved by WP-CLI.)
+	 *
+	 * [--title=<title>]
+	 * : Track title. Defaults to a title derived from the URL.
+	 *
+	 * [--artist=<artist>]
+	 * : Artist name(s), comma-separated.
+	 *
+	 * [--album=<album>]
+	 * : Album name(s), comma-separated.
+	 *
+	 * [--duration=<duration>]
+	 * : Human-readable duration, e.g. "4:24".
+	 *
+	 * [--artwork=<url>]
+	 * : Artwork image URL.
+	 *
+	 * [--porcelain]
+	 * : Output just the new track ID.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp jtpp track create --audio-url=https://media.example.test/song.mp3 --title="Song" --artist="Birdtalker"
+	 */
+	public function create( array $args, array $assoc_args ): void {
+		$saved = save_registry_track_from_fields( $this->writable_fields( $assoc_args ) );
+		if ( is_wp_error( $saved ) ) {
+			\WP_CLI::error( $saved->get_error_message() );
+		}
+
+		if ( ! empty( $assoc_args['porcelain'] ) ) {
+			\WP_CLI::line( (string) $saved );
+			return;
+		}
+
+		\WP_CLI::success( sprintf( 'Created track %d.', $saved ) );
+	}
+
+	/**
+	 * Show a single registry track.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <id>
+	 * : Track ID.
+	 *
+	 * [--field=<field>]
+	 * : Print just one field's value.
+	 *
+	 * [--fields=<fields>]
+	 * : Comma-separated fields to show.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 * ---
+	 * default: table
+	 * options:
+	 *   - table
+	 *   - json
+	 *   - csv
+	 *   - yaml
+	 * ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp jtpp track get 36
+	 *     wp jtpp track get 36 --field=guid
+	 */
+	public function get( array $args, array $assoc_args ): void {
+		$track = get_registry_track( (int) $args[0] );
+		if ( is_wp_error( $track ) ) {
+			\WP_CLI::error( $track->get_error_message() );
+		}
+
+		$formatter = new \WP_CLI\Formatter( $assoc_args, self::FIELDS );
+		$formatter->display_item( $track );
+	}
+
+	/**
+	 * List registry tracks.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--search=<term>]
+	 * : Filter by title/artist/album text, or match an exact audio URL.
+	 *
+	 * [--limit=<n>]
+	 * : Maximum results. Default 100.
+	 *
+	 * [--fields=<fields>]
+	 * : Comma-separated fields to show.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 * ---
+	 * default: table
+	 * options:
+	 *   - table
+	 *   - json
+	 *   - csv
+	 *   - yaml
+	 *   - ids
+	 *   - count
+	 * ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp jtpp track list
+	 *     wp jtpp track list --search=Birdtalker --format=json
+	 */
+	public function list( array $args, array $assoc_args ): void {
+		$search = isset( $assoc_args['search'] ) ? (string) $assoc_args['search'] : '';
+		$limit  = isset( $assoc_args['limit'] ) ? max( 1, (int) $assoc_args['limit'] ) : 100;
+		$tracks = find_registry_tracks( $search, $limit );
+
+		$format = $assoc_args['format'] ?? 'table';
+		if ( 'ids' === $format ) {
+			\WP_CLI::line(
+				implode(
+					' ',
+					array_map(
+						static function ( array $track ): int {
+							return (int) $track['trackId'];
+						},
+						$tracks
+					)
+				)
+			);
+			return;
+		}
+
+		$fields    = isset( $assoc_args['fields'] ) ? $assoc_args['fields'] : self::DEFAULT_FIELDS;
+		$formatter = new \WP_CLI\Formatter( $assoc_args, explode( ',', $fields ) );
+		$formatter->display_items( $tracks );
+	}
+
+	/**
+	 * Update fields on an existing registry track.
+	 *
+	 * Only the fields you pass change; others are preserved. Changing --url does
+	 * NOT change the track's stored guid (intentional, keeps saved loops working).
+	 *
+	 * ## OPTIONS
+	 *
+	 * <id>
+	 * : Track ID.
+	 *
+	 * [--title=<title>]
+	 * : New title.
+	 *
+	 * [--audio-url=<url>]
+	 * : New audio URL. (Named --audio-url because --url is reserved by WP-CLI.)
+	 *
+	 * [--artist=<artist>]
+	 * : New artist name(s), comma-separated. Pass "" to clear.
+	 *
+	 * [--album=<album>]
+	 * : New album name(s), comma-separated. Pass "" to clear.
+	 *
+	 * [--duration=<duration>]
+	 * : New duration.
+	 *
+	 * [--artwork=<url>]
+	 * : New artwork URL.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp jtpp track update 36 --title="New Title" --artist="Birdtalker"
+	 */
+	public function update( array $args, array $assoc_args ): void {
+		$fields = $this->writable_fields( $assoc_args );
+		if ( ! $fields ) {
+			\WP_CLI::error( 'No updatable fields provided.' );
+		}
+
+		$saved = apply_registry_track_updates( (int) $args[0], $fields );
+		if ( is_wp_error( $saved ) ) {
+			\WP_CLI::error( $saved->get_error_message() );
+		}
+
+		\WP_CLI::success( sprintf( 'Updated track %d.', $saved ) );
+	}
+
+	/**
+	 * Delete a registry track.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <id>
+	 * : Track ID.
+	 *
+	 * [--force]
+	 * : Skip trash and permanently delete.
+	 *
+	 * [--yes]
+	 * : Answer yes to the confirmation prompt.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp jtpp track delete 36 --force
+	 */
+	public function delete( array $args, array $assoc_args ): void {
+		$id    = (int) $args[0];
+		$track = get_registry_track( $id );
+		if ( is_wp_error( $track ) ) {
+			\WP_CLI::error( $track->get_error_message() );
+		}
+
+		$refs = count_registry_track_references( $id );
+		$note = $refs
+			? sprintf( ' It is still referenced by %d post(s); those playlists will show a missing track.', $refs )
+			: '';
+		\WP_CLI::confirm(
+			sprintf( 'Delete track %d ("%s")?%s', $id, $track['title'], $note ),
+			$assoc_args
+		);
+
+		$deleted = delete_registry_track( $id, ! empty( $assoc_args['force'] ) );
+		if ( is_wp_error( $deleted ) ) {
+			\WP_CLI::error( $deleted->get_error_message() );
+		}
+
+		\WP_CLI::success( sprintf( 'Deleted track %d.', $id ) );
+	}
+
+	/**
+	 * Pull only the writable track fields that were actually supplied.
+	 *
+	 * @param array $assoc_args Raw CLI assoc args.
+	 * @return array<string,string>
+	 */
+	private function writable_fields( array $assoc_args ): array {
+		$fields = array();
+		foreach ( self::CLI_FIELD_MAP as $flag => $field ) {
+			if ( array_key_exists( $flag, $assoc_args ) ) {
+				$fields[ $field ] = (string) $assoc_args[ $flag ];
+			}
+		}
+		return $fields;
 	}
 }
 

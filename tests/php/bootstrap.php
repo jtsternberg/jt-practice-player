@@ -45,11 +45,62 @@ function wp_get_attachment_image_src() { return false; }
 function get_the_title( $id ) { return 'Post ' . $id; }
 function wp_enqueue_script() {}
 function wp_enqueue_style() {}
-function is_wp_error() { return false; }
+if ( ! class_exists( 'WP_Error' ) ) {
+	class WP_Error {
+		public $code;
+		public $message;
+		public $data;
+		public function __construct( $code = '', $message = '', $data = array() ) {
+			$this->code    = $code;
+			$this->message = $message;
+			$this->data    = $data;
+		}
+		public function get_error_code() { return $this->code; }
+		public function get_error_message() { return $this->message; }
+		public function get_error_data() { return $this->data; }
+	}
+}
+function is_wp_error( $thing ) { return $thing instanceof WP_Error; }
 
-$GLOBALS['jtpp_test_posts'] = array();
-$GLOBALS['jtpp_test_meta']  = array();
-$GLOBALS['jtpp_test_terms'] = array();
+$GLOBALS['jtpp_test_posts']    = array();
+$GLOBALS['jtpp_test_meta']     = array();
+$GLOBALS['jtpp_test_terms']    = array();
+$GLOBALS['jtpp_test_next_id']  = 100;
+
+function wp_insert_post( $postarr, $wp_error = false ) {
+	$id = ++$GLOBALS['jtpp_test_next_id'];
+	$GLOBALS['jtpp_test_posts'][ $id ] = (object) array_merge(
+		array( 'ID' => $id ),
+		$postarr
+	);
+	return $id;
+}
+function wp_update_post( $postarr, $wp_error = false ) {
+	$id = (int) ( $postarr['ID'] ?? 0 );
+	if ( ! $id || empty( $GLOBALS['jtpp_test_posts'][ $id ] ) ) {
+		return $wp_error ? new WP_Error( 'invalid_post', 'Invalid post ID.' ) : 0;
+	}
+	foreach ( $postarr as $key => $value ) {
+		$GLOBALS['jtpp_test_posts'][ $id ]->$key = $value;
+	}
+	return $id;
+}
+function wp_delete_post( $id, $force = false ) {
+	$id = (int) $id;
+	if ( empty( $GLOBALS['jtpp_test_posts'][ $id ] ) ) {
+		return false;
+	}
+	$post = $GLOBALS['jtpp_test_posts'][ $id ];
+	unset( $GLOBALS['jtpp_test_posts'][ $id ], $GLOBALS['jtpp_test_meta'][ $id ], $GLOBALS['jtpp_test_terms'][ $id ] );
+	return $post;
+}
+function wp_set_object_terms( $id, $names, $taxonomy ) {
+	$GLOBALS['jtpp_test_terms'][ $id ][ $taxonomy ] = array_map(
+		static function ( $name ) { return (object) array( 'name' => $name ); },
+		(array) $names
+	);
+	return array();
+}
 
 function get_post( $id ) {
 	return $GLOBALS['jtpp_test_posts'][ $id ] ?? null;

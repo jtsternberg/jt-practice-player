@@ -601,7 +601,7 @@ export default function Edit( { attributes, setAttributes, clientId } ) {
 		( i, value ) =>
 			setAttributes( {
 				tracks: tracksRef.current.map( ( t, n ) =>
-					n === i ? { ...t, ...value } : t
+					n === i ? value : t
 				),
 			} ),
 		[ setAttributes ]

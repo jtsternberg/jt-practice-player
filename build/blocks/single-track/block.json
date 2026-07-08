@@ -12,6 +12,10 @@
       "type": "number",
       "default": 0
     },
+    "trackId": {
+      "type": "number",
+      "default": 0
+    },
     "customTitle": {
       "type": "string",
       "default": ""

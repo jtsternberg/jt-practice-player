@@ -5,6 +5,7 @@ $jtpp_tracks = resolve_tracks(
 	array(
 		array(
 			'id'          => $attributes['id'] ?? 0,
+			'trackId'     => $attributes['trackId'] ?? 0,
 			'customTitle' => $attributes['customTitle'] ?? '',
 			'url'         => $attributes['externalUrl'] ?? '',
 			'title'       => $attributes['externalTitle'] ?? '',

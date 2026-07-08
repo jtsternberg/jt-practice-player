@@ -365,18 +365,34 @@ function TrackSettings( {
 				track.trackId
 		  )
 		: __( 'Pending shared track', 'jt-practice-player' );
+	const registryDescription = isRegistry
+		? __(
+				'Editing these fields changes this song everywhere it is used.',
+				'jt-practice-player'
+		  )
+		: __(
+				'Save this as a shared track to reuse it across players.',
+				'jt-practice-player'
+		  );
 	const fallbackTrackLabel = ( trackId ) =>
 		sprintf(
 			/* translators: %d: Shared track post ID. */
 			__( 'Track #%d', 'jt-practice-player' ),
 			trackId
 		);
+	const suggestionLabel = ( suggestion ) =>
+		suggestion.title ||
+		suggestion.url ||
+		fallbackTrackLabel( suggestion.trackId );
 
 	return (
 		<>
 			{ isExternal ? (
 				<>
-					<p className="jtpp-editor-hint">{ registryLabel }</p>
+					<div className="jtpp-editor-registry-status">
+						<strong>{ registryLabel }</strong>
+						<span>{ registryDescription }</span>
+					</div>
 					<DebouncedText
 						type="url"
 						label={ __( 'Audio URL', 'jt-practice-player' ) }
@@ -445,9 +461,15 @@ function TrackSettings( {
 					/>
 					{ suggestions.length ? (
 						<div className="jtpp-editor-suggestions">
-							<p className="jtpp-editor-hint">
+							<strong>
 								{ __(
-									'Possible existing tracks',
+									'Matching shared track found',
+									'jt-practice-player'
+								) }
+							</strong>
+							<p>
+								{ __(
+									'Use an existing shared track instead of creating a duplicate.',
 									'jt-practice-player'
 								) }
 							</p>
@@ -457,11 +479,11 @@ function TrackSettings( {
 									variant="secondary"
 									onClick={ () => applyTrack( suggestion ) }
 								>
-									{ suggestion.title ||
-										suggestion.url ||
-										fallbackTrackLabel(
-											suggestion.trackId
-										) }
+									{ sprintf(
+										/* translators: %s: Shared track title. */
+										__( 'Use “%s”', 'jt-practice-player' ),
+										suggestionLabel( suggestion )
+									) }
 								</Button>
 							) ) }
 						</div>

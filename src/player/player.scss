@@ -1032,6 +1032,34 @@
 	font-style: italic;
 }
 
+.jtpp-editor-registry-status,
+.jtpp-editor-suggestions {
+	display: grid;
+	gap: 6px;
+	margin: 10px 0 14px;
+	padding: 10px 12px;
+	border: 1px solid var(--jtpp-line, color-mix(in srgb, currentcolor 16%, transparent));
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--jtpp-accent, currentcolor) 7%, transparent);
+}
+
+.jtpp-editor-registry-status span,
+.jtpp-editor-suggestions p {
+	margin: 0;
+	color: color-mix(in srgb, currentcolor 72%, transparent);
+	font-size: 12px;
+	line-height: 1.35;
+}
+
+.jtpp-editor-suggestions {
+	background: color-mix(in srgb, #f0b429 12%, transparent);
+	border-color: color-mix(in srgb, #f0b429 36%, currentcolor 12%);
+}
+
+.jtpp-editor-suggestions .components-button {
+	justify-self: start;
+}
+
 // Quick-edit drawer: opens inline directly under the selected track row so
 // editing stays in context even in a long list. Slides down on open.
 .jtpp-editor-drawer {

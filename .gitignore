@@ -9,3 +9,7 @@
 .env
 .env.*
 !.env.example
+
+# Local dependency/cache artifacts.
+vendor/
+.phpunit.result.cache

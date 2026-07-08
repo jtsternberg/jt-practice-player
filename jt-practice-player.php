@@ -17,12 +17,25 @@ defined( 'ABSPATH' ) || exit;
 const JTPP_VERSION = '0.1.0';
 const USER_LOOP_CUES_META_KEY = 'jtpp_saved_loop_cues';
 const USER_LOOP_CUES_LIMIT    = 20;
+const TRACK_POST_TYPE         = 'jtpp_track';
+const TRACK_ARTIST_TAXONOMY   = 'jtpp_track_artist';
+const TRACK_ALBUM_TAXONOMY    = 'jtpp_track_album';
+const TRACK_URL_META_KEY      = '_jtpp_track_url';
+const TRACK_GUID_META_KEY     = '_jtpp_track_guid';
+const TRACK_DURATION_META_KEY = '_jtpp_track_duration';
+const TRACK_ARTWORK_META_KEY  = '_jtpp_track_artwork';
 
 add_action( 'init', __NAMESPACE__ . '\\register' );
+add_action( 'save_post_' . TRACK_POST_TYPE, __NAMESPACE__ . '\\save_track_guid', 10, 2 );
 add_action( 'rest_api_init', __NAMESPACE__ . '\\register_rest_routes' );
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+	\WP_CLI::add_command( 'jtpp migrate-tracks', __NAMESPACE__ . '\\CLI_Migrate_Tracks_Command' );
+}
 function register() {
 	$dir = plugin_dir_path( __FILE__ );
 	$url = plugin_dir_url( __FILE__ );
+
+	register_track_registry();
 
 	$view_asset = file_exists( $dir . 'build/view.asset.php' )
 		? include $dir . 'build/view.asset.php'
@@ -37,13 +50,96 @@ function register() {
 	}
 
 	foreach ( glob( $dir . 'build/blocks/*/block.json' ) as $block_json ) {
+		if ( function_exists( 'opcache_invalidate' ) ) {
+			opcache_invalidate( $block_json, true );
+			opcache_invalidate( dirname( $block_json ) . '/index.asset.php', true );
+		}
 		register_block_type( $block_json );
+	}
+}
+
+function register_track_registry(): void {
+	register_post_type(
+		TRACK_POST_TYPE,
+		array(
+			'labels'             => array(
+				'name'          => __( 'Practice Tracks', 'jt-practice-player' ),
+				'singular_name' => __( 'Practice Track', 'jt-practice-player' ),
+			),
+			'public'             => false,
+			'publicly_queryable' => false,
+			'show_ui'            => true,
+			'show_in_menu'       => true,
+			'show_in_rest'       => true,
+			'supports'           => array( 'title' ),
+		)
+	);
+
+	foreach ( array( TRACK_ARTIST_TAXONOMY => __( 'Artists', 'jt-practice-player' ), TRACK_ALBUM_TAXONOMY => __( 'Albums', 'jt-practice-player' ) ) as $taxonomy => $label ) {
+		register_taxonomy(
+			$taxonomy,
+			TRACK_POST_TYPE,
+			array(
+				'label'        => $label,
+				'public'       => false,
+				'show_ui'      => true,
+				'show_in_rest' => true,
+			)
+		);
+	}
+
+	foreach ( array( TRACK_URL_META_KEY, TRACK_GUID_META_KEY, TRACK_DURATION_META_KEY, TRACK_ARTWORK_META_KEY ) as $meta_key ) {
+		register_post_meta(
+			TRACK_POST_TYPE,
+			$meta_key,
+			array(
+				'type'              => 'string',
+				'single'            => true,
+				'show_in_rest'      => true,
+				'sanitize_callback' => __NAMESPACE__ . '\\sanitize_track_meta',
+				'auth_callback'     => static function (): bool {
+					return current_user_can( 'edit_posts' );
+				},
+			)
+		);
+	}
+}
+
+function sanitize_track_meta( $value, string $meta_key ): string {
+	if ( TRACK_URL_META_KEY === $meta_key || TRACK_ARTWORK_META_KEY === $meta_key ) {
+		return sanitize_external_url( $value );
+	}
+	if ( TRACK_GUID_META_KEY === $meta_key ) {
+		$value = (string) $value;
+		return preg_match( '/^url:[a-f0-9]{16}$/', $value ) ? $value : '';
+	}
+	return sanitize_text_field( $value );
+}
+
+function save_track_guid( int $post_id, $post ): void {
+	$existing_guid = get_post_meta( $post_id, TRACK_GUID_META_KEY, true );
+	if ( $existing_guid ) {
+		return;
+	}
+
+	$guid = track_guid_from_url( get_post_meta( $post_id, TRACK_URL_META_KEY, true ) );
+	if ( $guid ) {
+		update_post_meta( $post_id, TRACK_GUID_META_KEY, $guid );
 	}
 }
 
 function resolve_tracks( array $refs ): array {
 	$tracks = array();
 	foreach ( $refs as $ref ) {
+		$track_id = isset( $ref['trackId'] ) ? (int) $ref['trackId'] : 0;
+		if ( $track_id ) {
+			$track = resolve_registry_track( $track_id, $ref );
+			if ( $track ) {
+				$tracks[] = $track;
+			}
+			continue;
+		}
+
 		$id  = isset( $ref['id'] ) ? (int) $ref['id'] : 0;
 		$url = $id ? wp_get_attachment_url( $id ) : false;
 		if ( $url ) {
@@ -56,6 +152,61 @@ function resolve_tracks( array $refs ): array {
 		}
 	}
 	return $tracks;
+}
+
+function resolve_registry_track( int $track_id, array $ref ): ?array {
+	static $memo = array();
+
+	$post = get_post( $track_id );
+	if ( ! $post || TRACK_POST_TYPE !== $post->post_type ) {
+		return null;
+	}
+
+	$memo_key = $track_id . ':' . ( $post->post_modified ?? '' );
+	if ( isset( $memo[ $memo_key ] ) ) {
+		$track = $memo[ $memo_key ];
+	} else {
+		$url  = sanitize_external_url( get_post_meta( $track_id, TRACK_URL_META_KEY, true ) );
+		$guid = sanitize_track_meta( get_post_meta( $track_id, TRACK_GUID_META_KEY, true ), TRACK_GUID_META_KEY );
+		if ( ! $url || ! $guid ) {
+			return null;
+		}
+
+		$track = array(
+			'id'       => $guid,
+			'url'      => $url,
+			'title'    => get_the_title( $track_id ),
+			'artist'   => track_term_names( $track_id, TRACK_ARTIST_TAXONOMY ),
+			'album'    => track_term_names( $track_id, TRACK_ALBUM_TAXONOMY ),
+			'artwork'  => sanitize_external_url( get_post_meta( $track_id, TRACK_ARTWORK_META_KEY, true ) ),
+			'duration' => sanitize_text_field( get_post_meta( $track_id, TRACK_DURATION_META_KEY, true ) ),
+		);
+
+		$memo[ $memo_key ] = $track;
+	}
+
+	if ( ! empty( $ref['customTitle'] ) ) {
+		$track['title'] = sanitize_text_field( $ref['customTitle'] );
+	}
+
+	return $track;
+}
+
+function track_term_names( int $track_id, string $taxonomy ): string {
+	$terms = get_the_terms( $track_id, $taxonomy );
+	if ( ! $terms || is_wp_error( $terms ) ) {
+		return '';
+	}
+
+	return implode(
+		', ',
+		array_map(
+			static function ( $term ): string {
+				return sanitize_text_field( $term->name ?? '' );
+			},
+			$terms
+		)
+	);
 }
 
 function resolve_attachment_track( int $id, string $url, array $ref ): array {
@@ -83,7 +234,7 @@ function resolve_external_track( array $ref ): ?array {
 	$title = sanitize_text_field( $ref['title'] ?? '' );
 
 	return array(
-		'id'       => 'url:' . substr( md5( $url ), 0, 16 ),
+		'id'       => track_guid_from_url( $url ),
 		'url'      => $url,
 		'title'    => $title ? $title : title_from_url( $url ),
 		'artist'   => sanitize_text_field( $ref['artist'] ?? '' ),
@@ -91,6 +242,11 @@ function resolve_external_track( array $ref ): ?array {
 		'artwork'  => sanitize_external_url( $ref['artwork'] ?? '' ),
 		'duration' => sanitize_text_field( $ref['duration'] ?? '' ),
 	);
+}
+
+function track_guid_from_url( $url ): string {
+	$url = sanitize_external_url( $url );
+	return $url ? 'url:' . substr( md5( $url ), 0, 16 ) : '';
 }
 
 function sanitize_external_url( $url ): string {
@@ -244,6 +400,37 @@ function render_player( array $tracks, array $options ): string {
 function register_rest_routes() {
 	register_rest_route(
 		'jtpp/v1',
+		'/tracks',
+		array(
+			array(
+				'methods'             => \WP_REST_Server::READABLE,
+				'callback'            => __NAMESPACE__ . '\\rest_search_tracks',
+				'permission_callback' => __NAMESPACE__ . '\\rest_current_user_can_edit_tracks',
+			),
+			array(
+				'methods'             => \WP_REST_Server::EDITABLE,
+				'callback'            => __NAMESPACE__ . '\\rest_save_track',
+				'permission_callback' => __NAMESPACE__ . '\\rest_current_user_can_edit_tracks',
+			),
+		)
+	);
+	register_rest_route(
+		'jtpp/v1',
+		'/tracks/(?P<id>\d+)',
+		array(
+			'methods'             => \WP_REST_Server::READABLE,
+			'callback'            => __NAMESPACE__ . '\\rest_get_track',
+			'permission_callback' => __NAMESPACE__ . '\\rest_current_user_can_edit_tracks',
+			'args'                => array(
+				'id' => array(
+					'type' => 'integer',
+				),
+			),
+		)
+	);
+
+	register_rest_route(
+		'jtpp/v1',
 		'/saved-loops',
 		array(
 			array(
@@ -258,6 +445,312 @@ function register_rest_routes() {
 			),
 		)
 	);
+}
+
+function rest_current_user_can_edit_tracks(): bool {
+	return current_user_can( 'edit_posts' );
+}
+
+function rest_search_tracks( \WP_REST_Request $request ): \WP_REST_Response {
+	$search = sanitize_text_field( $request->get_param( 'search' ) ?? '' );
+	$posts  = get_posts(
+		array(
+			'post_type'      => TRACK_POST_TYPE,
+			'post_status'    => array( 'publish', 'draft' ),
+			'posts_per_page' => 10,
+			's'              => $search,
+		)
+	);
+
+	return rest_ensure_response(
+		array(
+			'tracks' => array_map( __NAMESPACE__ . '\\rest_prepare_track', $posts ),
+		)
+	);
+}
+
+function rest_get_track( \WP_REST_Request $request ) {
+	$post = get_post( (int) $request['id'] );
+	if ( ! $post || TRACK_POST_TYPE !== $post->post_type ) {
+		return new \WP_Error( 'jtpp_track_not_found', __( 'Track not found.', 'jt-practice-player' ), array( 'status' => 404 ) );
+	}
+
+	return rest_ensure_response(
+		array(
+			'track' => rest_prepare_track( $post ),
+		)
+	);
+}
+
+function rest_save_track( \WP_REST_Request $request ) {
+	$saved_id = save_registry_track_from_fields( $request->get_json_params() );
+	if ( is_wp_error( $saved_id ) ) {
+		return $saved_id;
+	}
+
+	return rest_ensure_response(
+		array(
+			'track' => rest_prepare_track( get_post( $saved_id ) ),
+		)
+	);
+}
+
+function save_registry_track_from_fields( array $fields ) {
+	$track_id = isset( $fields['trackId'] ) ? (int) $fields['trackId'] : 0;
+	$title    = sanitize_text_field( $fields['title'] ?? '' );
+	$url      = sanitize_external_url( $fields['url'] ?? '' );
+
+	if ( ! $url ) {
+		return new \WP_Error( 'jtpp_track_url_required', __( 'A valid audio URL is required.', 'jt-practice-player' ), array( 'status' => 400 ) );
+	}
+
+	$postarr = array(
+		'post_type'   => TRACK_POST_TYPE,
+		'post_status' => 'publish',
+		'post_title'  => $title ? $title : title_from_url( $url ),
+	);
+
+	if ( $track_id ) {
+		$postarr['ID'] = $track_id;
+		$saved_id      = wp_update_post( $postarr, true );
+	} else {
+		$saved_id = wp_insert_post( $postarr, true );
+	}
+
+	if ( is_wp_error( $saved_id ) ) {
+		return $saved_id;
+	}
+
+	update_post_meta( $saved_id, TRACK_URL_META_KEY, $url );
+	update_post_meta( $saved_id, TRACK_DURATION_META_KEY, sanitize_text_field( $fields['duration'] ?? '' ) );
+	update_post_meta( $saved_id, TRACK_ARTWORK_META_KEY, sanitize_external_url( $fields['artwork'] ?? '' ) );
+
+	save_track_guid( $saved_id, get_post( $saved_id ) );
+	wp_set_object_terms( $saved_id, term_names_from_param( $fields['artist'] ?? '' ), TRACK_ARTIST_TAXONOMY );
+	wp_set_object_terms( $saved_id, term_names_from_param( $fields['album'] ?? '' ), TRACK_ALBUM_TAXONOMY );
+
+	return $saved_id;
+}
+
+function rest_prepare_track( $post ): array {
+	$track_id = (int) $post->ID;
+	return array(
+		'trackId'  => $track_id,
+		'url'      => sanitize_external_url( get_post_meta( $track_id, TRACK_URL_META_KEY, true ) ),
+		'title'    => get_the_title( $track_id ),
+		'artist'   => track_term_names( $track_id, TRACK_ARTIST_TAXONOMY ),
+		'album'    => track_term_names( $track_id, TRACK_ALBUM_TAXONOMY ),
+		'duration' => sanitize_text_field( get_post_meta( $track_id, TRACK_DURATION_META_KEY, true ) ),
+		'artwork'  => sanitize_external_url( get_post_meta( $track_id, TRACK_ARTWORK_META_KEY, true ) ),
+		'guid'     => sanitize_track_meta( get_post_meta( $track_id, TRACK_GUID_META_KEY, true ), TRACK_GUID_META_KEY ),
+	);
+}
+
+function term_names_from_param( $value ): array {
+	return array_values(
+		array_filter(
+			array_map(
+				'sanitize_text_field',
+				array_map( 'trim', explode( ',', (string) $value ) )
+			)
+		)
+	);
+}
+
+class CLI_Migrate_Tracks_Command {
+	/**
+	 * Convert inline external track refs to central registry refs.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--write]
+	 * : Persist converted post content. Defaults to dry-run.
+	 *
+	 * [--post_id=<id>]
+	 * : Limit migration to one post.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp jtpp migrate-tracks --url=https://example.test
+	 *     wp jtpp migrate-tracks --url=https://example.test --write
+	 */
+	public function __invoke( array $args, array $assoc_args ): void {
+		$write   = ! empty( $assoc_args['write'] );
+		$post_id = isset( $assoc_args['post_id'] ) ? (int) $assoc_args['post_id'] : 0;
+		$posts   = $post_id ? array_filter( array( get_post( $post_id ) ) ) : get_posts(
+			array(
+				'post_type'      => 'any',
+				'post_status'    => array( 'publish', 'draft', 'private', 'future' ),
+				'posts_per_page' => -1,
+				's'              => 'wp:jtpp/',
+			)
+		);
+		$totals  = array(
+			'posts'     => 0,
+			'converted' => 0,
+			'existing'  => 0,
+			'created'   => 0,
+			'dry_create' => 0,
+			'skipped'   => 0,
+		);
+
+		foreach ( $posts as $post ) {
+			if ( ! has_blocks( $post->post_content ) ) {
+				continue;
+			}
+
+			$result = migrate_track_refs_in_content( $post->post_content, $write );
+			if ( ! $result['converted'] && ! $result['dry_create'] && ! $result['skipped'] ) {
+				continue;
+			}
+
+			$totals['posts']++;
+			foreach ( array( 'converted', 'existing', 'created', 'dry_create', 'skipped' ) as $key ) {
+				$totals[ $key ] += $result[ $key ];
+			}
+
+			\WP_CLI::log(
+				sprintf(
+					'%s post %d: converted=%d existing=%d created=%d dry-create=%d skipped=%d',
+					$write ? 'Updated' : 'Would update',
+					$post->ID,
+					$result['converted'],
+					$result['existing'],
+					$result['created'],
+					$result['dry_create'],
+					$result['skipped']
+				)
+			);
+
+			if ( $write && $result['changed'] ) {
+				wp_update_post(
+					array(
+						'ID'           => $post->ID,
+						'post_content' => $result['content'],
+					)
+				);
+			}
+		}
+
+		\WP_CLI::success(
+			sprintf(
+				'%s. posts=%d converted=%d existing=%d created=%d dry-create=%d skipped=%d',
+				$write ? 'Migration complete' : 'Dry run complete',
+				$totals['posts'],
+				$totals['converted'],
+				$totals['existing'],
+				$totals['created'],
+				$totals['dry_create'],
+				$totals['skipped']
+			)
+		);
+	}
+}
+
+function migrate_track_refs_in_content( string $content, bool $write = false ): array {
+	$blocks = parse_blocks( $content );
+	$result = array(
+		'content'    => $content,
+		'changed'    => false,
+		'converted'  => 0,
+		'existing'   => 0,
+		'created'    => 0,
+		'dry_create' => 0,
+		'skipped'    => 0,
+	);
+
+	migrate_track_refs_in_blocks( $blocks, $write, $result );
+
+	if ( $result['changed'] ) {
+		$result['content'] = serialize_blocks( $blocks );
+	}
+
+	return $result;
+}
+
+function migrate_track_refs_in_blocks( array &$blocks, bool $write, array &$result ): void {
+	foreach ( $blocks as &$block ) {
+		if ( 'jtpp/playlist' === ( $block['blockName'] ?? '' ) && ! empty( $block['attrs']['tracks'] ) && is_array( $block['attrs']['tracks'] ) ) {
+			foreach ( $block['attrs']['tracks'] as &$ref ) {
+				$next = migrate_inline_external_track_ref( $ref, $write, $result );
+				if ( $next !== $ref ) {
+					$ref               = $next;
+					$result['changed'] = true;
+				}
+			}
+			unset( $ref );
+		}
+
+		if ( 'jtpp/track' === ( $block['blockName'] ?? '' ) && empty( $block['attrs']['trackId'] ) && empty( $block['attrs']['id'] ) && ! empty( $block['attrs']['externalUrl'] ) ) {
+			$ref  = array(
+				'url'      => $block['attrs']['externalUrl'] ?? '',
+				'title'    => $block['attrs']['externalTitle'] ?? '',
+				'artist'   => $block['attrs']['externalArtist'] ?? '',
+				'album'    => $block['attrs']['externalAlbum'] ?? '',
+				'artwork'  => $block['attrs']['externalArtwork'] ?? '',
+				'duration' => $block['attrs']['externalDuration'] ?? '',
+			);
+			$next = migrate_inline_external_track_ref( $ref, $write, $result );
+			if ( ! empty( $next['trackId'] ) ) {
+				$block['attrs']['trackId'] = $next['trackId'];
+				$block['attrs']['source']  = 'track';
+				$result['changed']         = true;
+			}
+		}
+
+		if ( ! empty( $block['innerBlocks'] ) ) {
+			migrate_track_refs_in_blocks( $block['innerBlocks'], $write, $result );
+		}
+	}
+	unset( $block );
+}
+
+function migrate_inline_external_track_ref( array $ref, bool $write, array &$result ): array {
+	if ( ! empty( $ref['id'] ) || ! empty( $ref['trackId'] ) ) {
+		return $ref;
+	}
+
+	$url = sanitize_external_url( $ref['url'] ?? '' );
+	if ( ! $url ) {
+		$result['skipped']++;
+		return $ref;
+	}
+
+	$track_id = find_registry_track_by_url( $url );
+	if ( $track_id ) {
+		$result['existing']++;
+	} elseif ( $write ) {
+		$track_id = save_registry_track_from_fields( $ref );
+		if ( is_wp_error( $track_id ) ) {
+			$result['skipped']++;
+			return $ref;
+		}
+		$result['created']++;
+	} else {
+		$result['dry_create']++;
+		return $ref;
+	}
+
+	$result['converted']++;
+	return array(
+		'trackId'     => (int) $track_id,
+		'customTitle' => '',
+	);
+}
+
+function find_registry_track_by_url( string $url ): int {
+	$posts = get_posts(
+		array(
+			'post_type'      => TRACK_POST_TYPE,
+			'post_status'    => array( 'publish', 'draft', 'private' ),
+			'posts_per_page' => 1,
+			'fields'         => 'ids',
+			'meta_key'       => TRACK_URL_META_KEY,
+			'meta_value'     => sanitize_external_url( $url ),
+		)
+	);
+
+	return $posts ? (int) $posts[0] : 0;
 }
 
 function rest_current_user_can_manage_saved_loops(): bool {

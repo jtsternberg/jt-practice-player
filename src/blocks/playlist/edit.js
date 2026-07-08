@@ -305,7 +305,10 @@ function TrackSettings( {
 		const normalized = canonicalFieldsFromTrack( next );
 		setDraft( normalized );
 		setOriginal( normalized.trackId ? { ...normalized } : null );
-		setTrack( index, normalized );
+		setTrack( index, {
+			trackId: normalized.trackId,
+			customTitle: track.customTitle || '',
+		} );
 		setSuggestions( [] );
 	};
 

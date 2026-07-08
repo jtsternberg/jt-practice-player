@@ -259,10 +259,12 @@ function TrackSettings( {
 		if ( ! isExternal ) {
 			return undefined;
 		}
-		const search = [ draft.url, draft.title, draft.artist, draft.album ]
-			.filter( Boolean )
-			.join( ' ' )
-			.trim();
+		const search = (
+			draft.url ||
+			[ draft.title, draft.artist, draft.album ]
+				.filter( Boolean )
+				.join( ' ' )
+		).trim();
 		if ( search.length < 3 ) {
 			setSuggestions( [] );
 			return undefined;

@@ -453,14 +453,35 @@ function rest_current_user_can_edit_tracks(): bool {
 
 function rest_search_tracks( \WP_REST_Request $request ): \WP_REST_Response {
 	$search = sanitize_text_field( $request->get_param( 'search' ) ?? '' );
-	$posts  = get_posts(
+	$posts  = array();
+	$url    = sanitize_external_url( $search );
+
+	if ( $url ) {
+		$track_id = find_registry_track_by_url( $url );
+		if ( $track_id ) {
+			$post = get_post( $track_id );
+			if ( $post ) {
+				$posts[] = $post;
+			}
+		}
+	}
+
+	$exclude = array_map(
+		static function ( $post ): int {
+			return (int) $post->ID;
+		},
+		$posts
+	);
+	$search_posts = get_posts(
 		array(
 			'post_type'      => TRACK_POST_TYPE,
 			'post_status'    => array( 'publish', 'draft' ),
 			'posts_per_page' => 10,
 			's'              => $search,
+			'post__not_in'   => $exclude,
 		)
 	);
+	$posts        = array_merge( $posts, $search_posts );
 
 	return rest_ensure_response(
 		array(

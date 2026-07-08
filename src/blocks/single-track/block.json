@@ -9,6 +9,7 @@
 	"textdomain": "jt-practice-player",
 	"attributes": {
 		"id": { "type": "number", "default": 0 },
+		"trackId": { "type": "number", "default": 0 },
 		"customTitle": { "type": "string", "default": "" },
 		"source": { "type": "string", "default": "" },
 		"externalUrl": { "type": "string", "default": "" },

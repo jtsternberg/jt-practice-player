@@ -1,4 +1,4 @@
-import { __ } from '@wordpress/i18n';
+import { __, sprintf } from '@wordpress/i18n';
 import {
 	useState,
 	useRef,
@@ -8,6 +8,7 @@ import {
 	Fragment,
 } from '@wordpress/element';
 import { useSelect, useDispatch } from '@wordpress/data';
+import apiFetch from '@wordpress/api-fetch';
 import {
 	useBlockProps,
 	MediaPlaceholder,
@@ -25,11 +26,17 @@ import {
 } from '@wordpress/components';
 import { dragHandle } from '@wordpress/icons';
 import DebouncedText from '../../components/debounced-text';
+import {
+	canonicalFieldsFromTrack,
+	hasCanonicalChanges,
+	shouldEnableTrackSave,
+} from './track-registry';
 
 // Shape appended when the author adds a manual external-URL track. Attachment
 // tracks carry an `id`; external tracks never do, which is how rows and the
 // PHP render layer tell them apart.
 const NEW_EXTERNAL_TRACK = {
+	trackId: 0,
 	url: '',
 	title: '',
 	artist: '',
@@ -88,13 +95,39 @@ const PreviewRow = memo( function PreviewRow( {
 	startDrag,
 } ) {
 	const isExternal = ! track.id;
+	const [ registryTrack, setRegistryTrack ] = useState( null );
 	const attachment = useSelect(
 		( select ) =>
 			track.id ? select( 'core' ).getMedia( track.id ) : null,
 		[ track.id ]
 	);
+	useEffect( () => {
+		if ( ! track.trackId ) {
+			setRegistryTrack( null );
+			return undefined;
+		}
+		let cancelled = false;
+		apiFetch( { path: `/jtpp/v1/tracks/${ track.trackId }` } )
+			.then( ( response ) => {
+				if ( ! cancelled ) {
+					setRegistryTrack( response.track || null );
+				}
+			} )
+			.catch( () => {
+				if ( ! cancelled ) {
+					setRegistryTrack( null );
+				}
+			} );
+		return () => {
+			cancelled = true;
+		};
+	}, [ track.trackId ] );
+	const registryFields = registryTrack
+		? canonicalFieldsFromTrack( registryTrack )
+		: null;
 	const title = isExternal
 		? track.title ||
+		  registryFields?.title ||
 		  track.url ||
 		  __( 'External audio', 'jt-practice-player' )
 		: track.customTitle ||
@@ -102,8 +135,10 @@ const PreviewRow = memo( function PreviewRow( {
 		  __( '(loading…)', 'jt-practice-player' );
 	// Artist/duration for attachment tracks are derived server-side, so only
 	// external tracks can show them in the editor preview.
-	const artist = isExternal ? track.artist : '';
-	const duration = isExternal ? track.duration : '';
+	const artist = isExternal ? track.artist || registryFields?.artist : '';
+	const duration = isExternal
+		? track.duration || registryFields?.duration
+		: '';
 
 	const isSource = drag && drag.from === index;
 	const showAbove =
@@ -171,26 +206,174 @@ const PreviewRow = memo( function PreviewRow( {
 } );
 
 // Sidebar editor for whichever track is selected in the preview.
-function TrackSettings( { track, index, count, setField, onRemove, onMove } ) {
+function TrackSettings( {
+	track,
+	index,
+	count,
+	setField,
+	setTrack,
+	onRemove,
+	onMove,
+} ) {
 	const isExternal = ! track.id;
+	const isRegistry = Boolean( track.trackId );
 	const attachment = useSelect(
 		( select ) =>
 			track.id ? select( 'core' ).getMedia( track.id ) : null,
 		[ track.id ]
 	);
+	const [ original, setOriginal ] = useState( null );
+	const [ draft, setDraft ] = useState( track );
+	const [ suggestions, setSuggestions ] = useState( [] );
+	const [ saving, setSaving ] = useState( false );
+	const [ error, setError ] = useState( '' );
+
+	useEffect( () => {
+		setDraft( track );
+		setOriginal( track.trackId ? { ...track } : null );
+		setSuggestions( [] );
+		setError( '' );
+	}, [ track, track.trackId ] );
+
+	useEffect( () => {
+		if ( ! track.trackId ) {
+			return undefined;
+		}
+		let cancelled = false;
+		apiFetch( { path: `/jtpp/v1/tracks/${ track.trackId }` } )
+			.then( ( response ) => {
+				if ( cancelled || ! response.track ) {
+					return;
+				}
+				const fields = canonicalFieldsFromTrack( response.track );
+				setDraft( fields );
+				setOriginal( fields );
+			} )
+			.catch( () => {} );
+		return () => {
+			cancelled = true;
+		};
+	}, [ track.trackId ] );
+
+	useEffect( () => {
+		if ( ! isExternal ) {
+			return undefined;
+		}
+		const search = [ draft.url, draft.title, draft.artist, draft.album ]
+			.filter( Boolean )
+			.join( ' ' )
+			.trim();
+		if ( search.length < 3 ) {
+			setSuggestions( [] );
+			return undefined;
+		}
+
+		let cancelled = false;
+		const timer = window.setTimeout( () => {
+			apiFetch( {
+				path: `/jtpp/v1/tracks?search=${ encodeURIComponent(
+					search
+				) }`,
+			} )
+				.then( ( response ) => {
+					if ( ! cancelled ) {
+						setSuggestions( response.tracks || [] );
+					}
+				} )
+				.catch( () => {
+					if ( ! cancelled ) {
+						setSuggestions( [] );
+					}
+				} );
+		}, 250 );
+
+		return () => {
+			cancelled = true;
+			window.clearTimeout( timer );
+		};
+	}, [ draft.album, draft.artist, draft.title, draft.url, isExternal ] );
+
+	const updateDraft = ( key, value ) => {
+		const next = { ...draft, [ key ]: value };
+		setDraft( next );
+		if ( ! next.trackId ) {
+			setField( index, key, value );
+		}
+	};
+
+	const applyTrack = ( next ) => {
+		const normalized = canonicalFieldsFromTrack( next );
+		setDraft( normalized );
+		setOriginal( normalized.trackId ? { ...normalized } : null );
+		setTrack( index, normalized );
+		setSuggestions( [] );
+	};
+
+	const saveTrack = () => {
+		setError( '' );
+		if (
+			draft.trackId &&
+			hasCanonicalChanges( original, draft ) &&
+			// eslint-disable-next-line no-alert
+			! window.confirm(
+				__(
+					'Save changes to this shared track? This updates every playlist that uses it.',
+					'jt-practice-player'
+				)
+			)
+		) {
+			return;
+		}
+
+		setSaving( true );
+		apiFetch( {
+			path: '/jtpp/v1/tracks',
+			method: 'POST',
+			data: draft,
+		} )
+			.then( ( response ) => {
+				if ( response.track ) {
+					applyTrack( response.track );
+				}
+			} )
+			.catch( () => {
+				setError(
+					__(
+						'Could not save the shared track.',
+						'jt-practice-player'
+					)
+				);
+			} )
+			.finally( () => setSaving( false ) );
+	};
+	const registryLabel = isRegistry
+		? sprintf(
+				/* translators: %d: Shared track post ID. */
+				__( 'Shared track #%d', 'jt-practice-player' ),
+				track.trackId
+		  )
+		: __( 'Pending shared track', 'jt-practice-player' );
+	const fallbackTrackLabel = ( trackId ) =>
+		sprintf(
+			/* translators: %d: Shared track post ID. */
+			__( 'Track #%d', 'jt-practice-player' ),
+			trackId
+		);
+
 	return (
 		<>
 			{ isExternal ? (
 				<>
+					<p className="jtpp-editor-hint">{ registryLabel }</p>
 					<DebouncedText
 						type="url"
 						label={ __( 'Audio URL', 'jt-practice-player' ) }
 						__nextHasNoMarginBottom
-						value={ track.url || '' }
+						value={ draft.url || '' }
 						placeholder="https://…"
-						onChange={ ( v ) => setField( index, 'url', v ) }
+						onChange={ ( v ) => updateDraft( 'url', v ) }
 						help={
-							urlLooksInvalid( track.url )
+							urlLooksInvalid( draft.url )
 								? __(
 										'This doesn’t look like a valid URL.',
 										'jt-practice-player'
@@ -198,7 +381,7 @@ function TrackSettings( { track, index, count, setField, onRemove, onMove } ) {
 								: undefined
 						}
 					/>
-					{ track.url && isCrossOrigin( track.url ) && (
+					{ draft.url && isCrossOrigin( draft.url ) && (
 						<Notice status="warning" isDismissible={ false }>
 							{ __(
 								'Waveform loading depends on the remote host allowing browser audio fetches. If not, the player falls back to native audio controls.',
@@ -209,38 +392,38 @@ function TrackSettings( { track, index, count, setField, onRemove, onMove } ) {
 					<DebouncedText
 						label={ __( 'Title', 'jt-practice-player' ) }
 						__nextHasNoMarginBottom
-						value={ track.title || '' }
+						value={ draft.title || '' }
 						placeholder={ __( 'Song title', 'jt-practice-player' ) }
-						onChange={ ( v ) => setField( index, 'title', v ) }
+						onChange={ ( v ) => updateDraft( 'title', v ) }
 					/>
 					<DebouncedText
 						label={ __( 'Artist', 'jt-practice-player' ) }
 						__nextHasNoMarginBottom
-						value={ track.artist || '' }
-						onChange={ ( v ) => setField( index, 'artist', v ) }
+						value={ draft.artist || '' }
+						onChange={ ( v ) => updateDraft( 'artist', v ) }
 					/>
 					<DebouncedText
 						label={ __( 'Album', 'jt-practice-player' ) }
 						__nextHasNoMarginBottom
-						value={ track.album || '' }
-						onChange={ ( v ) => setField( index, 'album', v ) }
+						value={ draft.album || '' }
+						onChange={ ( v ) => updateDraft( 'album', v ) }
 					/>
 					<DebouncedText
 						label={ __( 'Duration', 'jt-practice-player' ) }
 						__nextHasNoMarginBottom
-						value={ track.duration || '' }
+						value={ draft.duration || '' }
 						placeholder="3:42"
-						onChange={ ( v ) => setField( index, 'duration', v ) }
+						onChange={ ( v ) => updateDraft( 'duration', v ) }
 					/>
 					<DebouncedText
 						type="url"
 						label={ __( 'Artwork URL', 'jt-practice-player' ) }
 						__nextHasNoMarginBottom
-						value={ track.artwork || '' }
+						value={ draft.artwork || '' }
 						placeholder="https://…"
-						onChange={ ( v ) => setField( index, 'artwork', v ) }
+						onChange={ ( v ) => updateDraft( 'artwork', v ) }
 						help={
-							urlLooksInvalid( track.artwork )
+							urlLooksInvalid( draft.artwork )
 								? __(
 										'This doesn’t look like a valid URL.',
 										'jt-practice-player'
@@ -248,6 +431,54 @@ function TrackSettings( { track, index, count, setField, onRemove, onMove } ) {
 								: undefined
 						}
 					/>
+					{ suggestions.length ? (
+						<div className="jtpp-editor-suggestions">
+							<p className="jtpp-editor-hint">
+								{ __(
+									'Possible existing tracks',
+									'jt-practice-player'
+								) }
+							</p>
+							{ suggestions.map( ( suggestion ) => (
+								<Button
+									key={ suggestion.trackId }
+									variant="secondary"
+									onClick={ () => applyTrack( suggestion ) }
+								>
+									{ suggestion.title ||
+										suggestion.url ||
+										fallbackTrackLabel(
+											suggestion.trackId
+										) }
+								</Button>
+							) ) }
+						</div>
+					) : null }
+					{ error ? (
+						<Notice status="error" isDismissible={ false }>
+							{ error }
+						</Notice>
+					) : null }
+					<Flex
+						className="jtpp-editor-track-actions"
+						justify="flex-start"
+					>
+						<Button
+							variant="primary"
+							disabled={
+								saving ||
+								! shouldEnableTrackSave( original, draft )
+							}
+							onClick={ saveTrack }
+						>
+							{ isRegistry
+								? __(
+										'Save shared track',
+										'jt-practice-player'
+								  )
+								: __( 'Save track', 'jt-practice-player' ) }
+						</Button>
+					</Flex>
 				</>
 			) : (
 				<>
@@ -357,6 +588,15 @@ export default function Edit( { attributes, setAttributes, clientId } ) {
 			setAttributes( {
 				tracks: tracksRef.current.map( ( t, n ) =>
 					n === i ? { ...t, [ key ]: value } : t
+				),
+			} ),
+		[ setAttributes ]
+	);
+	const setTrack = useCallback(
+		( i, value ) =>
+			setAttributes( {
+				tracks: tracksRef.current.map( ( t, n ) =>
+					n === i ? { ...t, ...value } : t
 				),
 			} ),
 		[ setAttributes ]
@@ -606,10 +846,15 @@ export default function Edit( { attributes, setAttributes, clientId } ) {
 															)
 														}
 													>
-														{ __(
-															'Done',
-															'jt-practice-player'
-														) }
+														{ track.id
+															? __(
+																	'Done',
+																	'jt-practice-player'
+															  )
+															: __(
+																	'Cancel',
+																	'jt-practice-player'
+															  ) }
 													</Button>
 												</div>
 												<TrackSettings
@@ -617,6 +862,7 @@ export default function Edit( { attributes, setAttributes, clientId } ) {
 													index={ i }
 													count={ tracks.length }
 													setField={ setField }
+													setTrack={ setTrack }
 													onRemove={ () =>
 														remove( i )
 													}

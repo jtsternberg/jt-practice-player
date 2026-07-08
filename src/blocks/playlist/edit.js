@@ -256,7 +256,7 @@ function TrackSettings( {
 	}, [ track.trackId ] );
 
 	useEffect( () => {
-		if ( ! isExternal ) {
+		if ( ! isExternal || draft.trackId ) {
 			return undefined;
 		}
 		const search = (
@@ -293,7 +293,14 @@ function TrackSettings( {
 			cancelled = true;
 			window.clearTimeout( timer );
 		};
-	}, [ draft.album, draft.artist, draft.title, draft.url, isExternal ] );
+	}, [
+		draft.album,
+		draft.artist,
+		draft.title,
+		draft.trackId,
+		draft.url,
+		isExternal,
+	] );
 
 	const updateDraft = ( key, value ) => {
 		const next = { ...draft, [ key ]: value };

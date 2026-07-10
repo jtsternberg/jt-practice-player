@@ -1847,10 +1847,15 @@ export class PracticePlayer {
 		}
 		if ( track?.artwork ) {
 			const safeUrl = String( track.artwork ).replace( /["\\]/g, '\\$&' );
-			this.artworkGlowEl.style.backgroundImage = `url("${ safeUrl }")`;
+			// A custom property inherits into ::before without the element
+			// painting (and tiling) the image itself.
+			this.artworkGlowEl.style.setProperty(
+				'--jtpp-artwork-glow',
+				`url("${ safeUrl }")`
+			);
 			this.panelEl.classList.add( 'has-artwork-glow' );
 		} else {
-			this.artworkGlowEl.style.backgroundImage = '';
+			this.artworkGlowEl.style.removeProperty( '--jtpp-artwork-glow' );
 			this.panelEl.classList.remove( 'has-artwork-glow' );
 		}
 	}

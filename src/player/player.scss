@@ -317,12 +317,12 @@
 .jtpp-artwork-glow::before {
 	position: absolute;
 	inset: -75%;
-	background-image: inherit;
+	background-image: var(--jtpp-artwork-glow, none);
 	background-repeat: no-repeat;
 	background-position: center;
-	// Zoom well past `cover` and blur hard so even a high-contrast logo
-	// dissolves into a smooth color field rather than a recognizable image.
-	background-size: 220% auto;
+	// `cover` guarantees a full-bleed fill on any panel shape; the heavy blur
+	// dissolves even a high-contrast logo into a smooth color field.
+	background-size: cover;
 	content: "";
 	opacity: 0.62;
 	filter: blur(96px) saturate(1.6);

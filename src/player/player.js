@@ -1,5 +1,7 @@
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js';
+import { createAudioTransport } from './audio-transport';
+import { createMediaSessionAdapter } from './media-session';
 import {
 	loopJumpTarget,
 	clampSeek,
@@ -27,6 +29,7 @@ const PLAYERS = new Set();
 let activePlayer = null;
 let keyboardBound = false;
 let mediaSessionBound = false;
+let mediaSessionAdapter = null;
 const SAVE_DELAY = 1000;
 const REGION_COLOR = 'rgba(214, 137, 42, 0.24)';
 const WAVE_COLOR = '#9aa1aa';
@@ -107,21 +110,20 @@ function bindMediaSession() {
 		return;
 	}
 	mediaSessionBound = true;
-	const actions = {
-		play: () => activePlayer?.play(),
-		pause: () => activePlayer?.pause(),
-		previoustrack: () => activePlayer?.advance( -1, true ),
-		nexttrack: () => activePlayer?.advance( 1, true ),
-		seekbackward: () => activePlayer?.skip( -15 ),
-		seekforward: () => activePlayer?.skip( 15 ),
-	};
-	Object.entries( actions ).forEach( ( [ action, handler ] ) => {
-		try {
-			window.navigator.mediaSession.setActionHandler( action, handler );
-		} catch {
-			// Unsupported media session actions can be ignored.
-		}
-	} );
+	const MediaMetadataCtor =
+		typeof window.MediaMetadata === 'function'
+			? window.MediaMetadata
+			: class {
+					constructor( data ) {
+						Object.assign( this, data );
+					}
+			  };
+	mediaSessionAdapter = createMediaSessionAdapter(
+		window.navigator.mediaSession,
+		MediaMetadataCtor
+	);
+	// The adapter always routes through whichever player is currently active.
+	mediaSessionAdapter.bind( () => activePlayer );
 }
 
 export class PracticePlayer {
@@ -145,6 +147,8 @@ export class PracticePlayer {
 		this.saveTimer = null;
 		this.stickyFrame = null;
 		this.nativeAudio = null;
+		this.transport = null;
+		this.transportUnbinders = [];
 		this.audioByUrl = new Map();
 		this.waveformReady = false;
 		this.waveformLoadingTimer = null;
@@ -566,6 +570,8 @@ export class PracticePlayer {
 	createWaveSurfer( track, autoplay ) {
 		this.regions = RegionsPlugin.create();
 		this.nativeAudio = this.getTrackAudio( track );
+		this.transport = createAudioTransport( this.nativeAudio );
+		this.transport.setVolume( this.volume );
 		this.waveSurfer = WaveSurfer.create( {
 			container: this.waveformEl,
 			media: this.nativeAudio,
@@ -577,7 +583,6 @@ export class PracticePlayer {
 			cursorWidth: 3,
 			plugins: [ this.regions ],
 		} );
-		this.waveSurfer.setVolume( this.volume );
 		this.setWaveformLoading( true );
 		this.regions.enableDragSelection( {
 			color: REGION_COLOR,
@@ -586,6 +591,7 @@ export class PracticePlayer {
 			minLength: 0.2,
 		} );
 
+		this.bindTransportEvents();
 		this.bindWaveSurferEvents();
 		this.bindNativeAudioEvents( track, autoplay );
 		this.loadWaveformPeaks( track );
@@ -624,13 +630,18 @@ export class PracticePlayer {
 		}
 	}
 
+	bindTransportEvents() {
+		// Native audio is the single source of truth for transport events;
+		// WaveSurfer only mirrors the same media element for display.
+		this.transportUnbinders = [
+			this.transport.on( 'play', () => this.onPlay() ),
+			this.transport.on( 'pause', () => this.onPause() ),
+			this.transport.on( 'timeupdate', () => this.onTimeUpdate() ),
+			this.transport.on( 'ended', () => this.onFinish() ),
+		];
+	}
+
 	bindWaveSurferEvents() {
-		this.waveSurfer.on( 'timeupdate', ( time ) =>
-			this.onTimeUpdate( time )
-		);
-		this.waveSurfer.on( 'play', () => this.onPlay() );
-		this.waveSurfer.on( 'pause', () => this.onPause() );
-		this.waveSurfer.on( 'finish', () => this.onFinish() );
 		this.waveSurfer.on( 'error', () => this.showFallback() );
 
 		this.regions.on( 'region-created', ( region ) =>
@@ -805,7 +816,7 @@ export class PracticePlayer {
 	restoreTrackState() {
 		const state = loadTrackState( this.currentTrack().id );
 		if ( ! state ) {
-			this.waveSurfer.setTime( 0 );
+			this.transport?.seekTo( 0 );
 			this.applyRate( 1 );
 			return;
 		}
@@ -837,12 +848,12 @@ export class PracticePlayer {
 			Number.isFinite( state.loopStart ) &&
 			Number.isFinite( state.loopEnd )
 		) {
-			this.waveSurfer.setTime(
-				clampSeek( state.loopStart, this.waveSurfer.getDuration() )
+			this.transport?.seekTo(
+				clampSeek( state.loopStart, this.transport.snapshot().duration )
 			);
 			this.focusLoopZoom();
 		} else {
-			this.waveSurfer.setTime( 0 );
+			this.transport?.seekTo( 0 );
 		}
 		this.reflectLoopTools();
 		this.requestStickyUpdate();
@@ -859,16 +870,19 @@ export class PracticePlayer {
 		this.restoreTrackState();
 	}
 
-	onTimeUpdate( time ) {
+	onTimeUpdate() {
+		const time = this.transport ? this.transport.snapshot().position : 0;
 		const target = loopJumpTarget( time, this.loop );
 		if ( target !== null ) {
-			this.waveSurfer.setTime( target );
+			this.transport?.seekTo( target );
 			this.updateTimes();
 			this.scheduleSave();
+			this.syncMediaSessionState();
 			return;
 		}
 		this.updateTimes();
 		this.scheduleSave();
+		this.syncMediaSessionState();
 	}
 
 	onPlay() {
@@ -883,6 +897,7 @@ export class PracticePlayer {
 		if ( this.playButton ) {
 			this.playButton.innerHTML = PAUSE_ICON;
 		}
+		this.syncMediaSession();
 	}
 
 	onPause() {
@@ -892,11 +907,12 @@ export class PracticePlayer {
 		if ( this.playButton ) {
 			this.playButton.innerHTML = PLAY_ICON;
 		}
+		this.syncMediaSessionState();
 	}
 
 	onFinish() {
 		if ( this.loop?.on && this.loop.start < this.loop.end ) {
-			this.waveSurfer.setTime( this.loop.start );
+			this.transport?.seekTo( this.loop.start );
 			this.play();
 			return;
 		}
@@ -909,7 +925,7 @@ export class PracticePlayer {
 	}
 
 	togglePlay() {
-		if ( this.waveSurfer?.isPlaying() ) {
+		if ( this.transport?.snapshot().playing ) {
 			this.pause();
 		} else {
 			this.play();
@@ -917,14 +933,67 @@ export class PracticePlayer {
 	}
 
 	play() {
-		this.waveSurfer?.play()?.catch( () => {
+		this.transport?.play()?.catch( () => {
 			// Browsers can reject play() when the click did not count as a
 			// user gesture, especially in automation or strict autoplay modes.
 		} );
 	}
 
 	pause() {
-		this.waveSurfer?.pause();
+		this.transport?.pause();
+	}
+
+	// Media Session action surface: the adapter routes system controls
+	// (lock screen, CarPlay, hardware keys) through these methods.
+	previous() {
+		this.advance( -1, true );
+	}
+
+	next() {
+		this.advance( 1, true );
+	}
+
+	seekBy( seconds ) {
+		this.skip( seconds );
+	}
+
+	seekTo( seconds ) {
+		if ( ! this.transport ) {
+			return;
+		}
+		this.transport.seekTo( seconds );
+		this.updateTimes();
+		this.scheduleSave();
+	}
+
+	stop() {
+		this.pause();
+	}
+
+	syncMediaSession() {
+		if ( ! mediaSessionAdapter || activePlayer !== this ) {
+			return;
+		}
+		const track = this.currentTrack();
+		if ( track ) {
+			mediaSessionAdapter.updateMetadata(
+				track,
+				this.options,
+				document.title
+			);
+		}
+		this.syncMediaSessionState();
+	}
+
+	syncMediaSessionState() {
+		if (
+			! mediaSessionAdapter ||
+			activePlayer !== this ||
+			! this.transport
+		) {
+			return;
+		}
+		mediaSessionAdapter.updateState( this.transport.snapshot() );
 	}
 
 	toggleRepeatMode() {
@@ -1015,7 +1084,7 @@ export class PracticePlayer {
 			name,
 			start: this.loop.start,
 			end: this.loop.end,
-			rate: this.waveSurfer?.getPlaybackRate?.() || 1,
+			rate: this.transport?.snapshot().playbackRate || 1,
 			updatedAt: now,
 		};
 		const loops = [
@@ -1193,11 +1262,11 @@ export class PracticePlayer {
 	}
 
 	seekLoopStart() {
-		if ( ! this.loop || ! this.waveSurfer ) {
+		if ( ! this.loop || ! this.transport ) {
 			return;
 		}
-		this.waveSurfer.setTime(
-			clampSeek( this.loop.start, this.waveSurfer.getDuration() )
+		this.transport.seekTo(
+			clampSeek( this.loop.start, this.transport.snapshot().duration )
 		);
 		this.updateTimes();
 	}
@@ -1430,7 +1499,7 @@ export class PracticePlayer {
 	}
 
 	cycleSpeed() {
-		const current = this.waveSurfer?.getPlaybackRate?.() || 1;
+		const current = this.transport?.snapshot().playbackRate || 1;
 		const rate =
 			current === SPEED_STEPS[ SPEED_STEPS.length - 1 ]
 				? 1
@@ -1440,7 +1509,7 @@ export class PracticePlayer {
 	}
 
 	applyRate( rate ) {
-		this.waveSurfer?.setPlaybackRate( rate, true );
+		this.transport?.setRate( rate );
 		if ( this.speedSelect ) {
 			this.speedSelect.value = String( rate );
 		}
@@ -1453,28 +1522,24 @@ export class PracticePlayer {
 
 	setVolume( volume ) {
 		this.volume = Math.min( Math.max( volume, 0 ), 1 );
-		this.waveSurfer?.setVolume( this.volume );
+		this.transport?.setVolume( this.volume );
 		if ( this.volumeInput ) {
 			this.volumeInput.value = String( this.volume );
 		}
 	}
 
 	skip( seconds ) {
-		if ( ! this.waveSurfer ) {
+		if ( ! this.transport ) {
 			return;
 		}
-		this.waveSurfer.setTime(
-			clampSeek(
-				this.waveSurfer.getCurrentTime() + seconds,
-				this.waveSurfer.getDuration()
-			)
-		);
+		const { position, duration } = this.transport.snapshot();
+		this.transport.seekTo( clampSeek( position + seconds, duration ) );
 		this.updateTimes();
 		this.scheduleSave();
 	}
 
 	seekStart() {
-		this.waveSurfer?.setTime( 0 );
+		this.transport?.seekTo( 0 );
 		this.updateTimes();
 		this.scheduleSave();
 	}
@@ -1531,21 +1596,19 @@ export class PracticePlayer {
 				button.removeAttribute( 'aria-current' );
 			}
 		} );
+		this.syncMediaSession();
 	}
 
 	updateTimes() {
-		if ( ! this.waveSurfer ) {
+		if ( ! this.transport ) {
 			return;
 		}
+		const { position, duration } = this.transport.snapshot();
 		if ( this.currentTimeEl ) {
-			this.currentTimeEl.textContent = formatTime(
-				this.waveSurfer.getCurrentTime()
-			);
+			this.currentTimeEl.textContent = formatTime( position );
 		}
 		if ( this.totalTimeEl ) {
-			this.totalTimeEl.textContent = formatTime(
-				this.waveSurfer.getDuration()
-			);
+			this.totalTimeEl.textContent = formatTime( duration );
 		}
 	}
 
@@ -1575,7 +1638,7 @@ export class PracticePlayer {
 	}
 
 	stepSpeed( direction ) {
-		const current = this.waveSurfer?.getPlaybackRate?.() || 1;
+		const current = this.transport?.snapshot().playbackRate || 1;
 		this.applyRate( nextSpeed( current, direction ) );
 		this.scheduleSave();
 	}
@@ -1587,13 +1650,13 @@ export class PracticePlayer {
 
 	flushState = () => {
 		window.clearTimeout( this.saveTimer );
-		if ( ! this.waveSurfer || ! this.currentTrack() ) {
+		if ( ! this.transport || ! this.currentTrack() ) {
 			return;
 		}
 		saveTrackState( this.currentTrack().id, {
 			loopStart: this.loop?.start,
 			loopEnd: this.loop?.end,
-			rate: this.waveSurfer.getPlaybackRate?.() || 1,
+			rate: this.transport.snapshot().playbackRate,
 		} );
 		saveVolume( this.volume );
 	};
@@ -1713,10 +1776,13 @@ export class PracticePlayer {
 
 	destroyWaveSurfer() {
 		this.clearWaveformLoadingTimer();
+		this.transportUnbinders.forEach( ( off ) => off() );
+		this.transportUnbinders = [];
 		this.nativeAudio?.pause();
 		if ( this.waveSurfer ) {
 			this.waveSurfer.destroy();
 		}
+		this.transport = null;
 		this.nativeAudio = null;
 		if ( this.waveformEl ) {
 			this.waveformEl.textContent = '';

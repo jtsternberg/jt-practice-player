@@ -1464,6 +1464,12 @@
 		padding: 12px;
 	}
 
+	// The playlist panel's desktop selector removes inline padding. Match its
+	// specificity here so compact and loop-edit content keep phone gutters.
+	.jtpp-shell .jtpp-panel {
+		padding: 12px;
+	}
+
 	.jtpp-artwork {
 		width: 68px;
 		height: 68px;

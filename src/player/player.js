@@ -259,6 +259,7 @@ export class PracticePlayer {
 		this.nowTitleEl = this.rootEl.querySelector( '.jtpp-now-title' );
 		this.nowMetaEl = this.rootEl.querySelector( '.jtpp-now-meta' );
 		this.artworkEl = this.rootEl.querySelector( '.jtpp-artwork' );
+		this.artworkGlowEl = this.rootEl.querySelector( '.jtpp-artwork-glow' );
 		this.currentTimeEl = this.rootEl.querySelector( '.jtpp-time-current' );
 		this.totalTimeEl = this.rootEl.querySelector( '.jtpp-time-total' );
 		this.playButton = this.rootEl.querySelector( '.jtpp-play' );
@@ -1100,6 +1101,7 @@ export class PracticePlayer {
 			}
 		} );
 		this.playButton?.classList.add( 'is-playing' );
+		this.rootEl.classList.add( 'is-playing' );
 		this.playButton?.setAttribute( 'aria-label', 'Pause' );
 		if ( this.playButton ) {
 			this.playButton.innerHTML = PAUSE_ICON;
@@ -1110,6 +1112,7 @@ export class PracticePlayer {
 	onPause() {
 		this.flushState();
 		this.playButton?.classList.remove( 'is-playing' );
+		this.rootEl.classList.remove( 'is-playing' );
 		this.playButton?.setAttribute( 'aria-label', 'Play' );
 		if ( this.playButton ) {
 			this.playButton.innerHTML = PLAY_ICON;
@@ -1820,6 +1823,7 @@ export class PracticePlayer {
 				this.artworkEl.hidden = true;
 			}
 		}
+		this.updateArtworkGlow( track );
 		this.trackButtons.forEach( ( button, index ) => {
 			const active = index === this.activeIndex;
 			button.classList.toggle( 'is-active', active );
@@ -1831,6 +1835,24 @@ export class PracticePlayer {
 			}
 		} );
 		this.syncMediaSession();
+	}
+
+	// Ambient artwork wash: a heavily-blurred, dimmed, scaled copy of the
+	// current track's artwork suffuses the whole panel behind a dark scrim
+	// (Apple Music / Spotify style). Pure CSS background-image, so it works with
+	// cross-origin artwork; falls back to the flat card when a track has none.
+	updateArtworkGlow( track ) {
+		if ( ! this.artworkGlowEl || ! this.panelEl ) {
+			return;
+		}
+		if ( track?.artwork ) {
+			const safeUrl = String( track.artwork ).replace( /["\\]/g, '\\$&' );
+			this.artworkGlowEl.style.backgroundImage = `url("${ safeUrl }")`;
+			this.panelEl.classList.add( 'has-artwork-glow' );
+		} else {
+			this.artworkGlowEl.style.backgroundImage = '';
+			this.panelEl.classList.remove( 'has-artwork-glow' );
+		}
 	}
 
 	updateTimes() {

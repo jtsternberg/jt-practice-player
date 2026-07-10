@@ -279,13 +279,69 @@
 }
 
 .jtpp-panel {
+	position: relative;
 	display: grid;
 	gap: 13px;
 	padding: 14px;
 	border: 1px solid var(--jtpp-hairline);
 	border-radius: 8px;
+	// Own stacking context so the ambient wash (z-index 0) stays behind the
+	// player's own content (z-index 1) and never leaks over sibling blocks.
+	isolation: isolate;
 	background: linear-gradient(180deg, color-mix(in srgb, currentcolor 3%, transparent), transparent 42px);
 	box-shadow: 0 1px 0 color-mix(in srgb, currentcolor 5%, transparent);
+}
+
+// Ambient artwork wash: a heavily blurred, dimmed copy of the current track's
+// artwork suffuses the whole panel behind a dark scrim (Apple Music / Spotify
+// style). Hidden until a track with artwork loads; the flat card shows through
+// otherwise.
+.jtpp-artwork-glow {
+	position: absolute;
+	z-index: 0;
+	inset: 0;
+	overflow: hidden;
+	border-radius: inherit;
+	opacity: 0;
+	transition: opacity 360ms ease;
+	pointer-events: none;
+}
+
+.jtpp-panel.has-artwork-glow .jtpp-artwork-glow {
+	opacity: 1;
+}
+
+// Over-size the blurred layer far beyond the clip so the blur's own soft edge
+// never falls inside the panel — that fringe was the visible seam in the first
+// attempt. `background-image: inherit` picks up the URL JS sets on the parent.
+.jtpp-artwork-glow::before {
+	position: absolute;
+	inset: -75%;
+	background-image: inherit;
+	background-repeat: no-repeat;
+	background-position: center;
+	// Zoom well past `cover` and blur hard so even a high-contrast logo
+	// dissolves into a smooth color field rather than a recognizable image.
+	background-size: 220% auto;
+	content: "";
+	opacity: 0.62;
+	filter: blur(96px) saturate(1.6);
+}
+
+// Dark scrim over the wash keeps title/meta/time text at AA contrast on any
+// artwork. Canvas tracks the page background, so it dims on dark themes and
+// lightens on light ones. Net visible artwork lands around 0.15 opacity.
+.jtpp-artwork-glow::after {
+	position: absolute;
+	inset: 0;
+	background: color-mix(in srgb, Canvas 83%, transparent);
+	content: "";
+}
+
+// Keep every real child above the wash.
+.jtpp-panel.has-artwork-glow > *:not(.jtpp-artwork-glow) {
+	position: relative;
+	z-index: 1;
 }
 
 .jtpp-shell .jtpp-panel {
@@ -342,9 +398,11 @@
 	flex: 0 0 84px;
 	border-radius: 10px;
 	object-fit: cover;
+	// Soft drop shadow lifts the artwork off the ambient wash; a 1px hairline
+	// ring replaces the old heavy frame.
 	box-shadow:
-		0 1px 2px color-mix(in srgb, #000 18%, transparent),
-		0 0 0 1px color-mix(in srgb, currentcolor 8%, transparent);
+		0 6px 16px color-mix(in srgb, #000 30%, transparent),
+		0 0 0 1px color-mix(in srgb, #fff 7%, transparent);
 }
 
 .jtpp-now-copy {
@@ -352,14 +410,17 @@
 }
 
 .jtpp-now-title {
-	font-size: 1.08rem;
-	font-weight: 730;
+	font-size: 1.22rem;
+	font-weight: 760;
+	letter-spacing: -0.01em;
+	line-height: 1.2;
 }
 
 .jtpp-now-meta {
 	margin-top: 4px;
 	color: var(--jtpp-muted);
-	font-size: 0.92rem;
+	font-size: 0.9rem;
+	letter-spacing: 0.01em;
 }
 
 .jtpp-loop-mode-bar {
@@ -455,7 +516,31 @@
 .jtpp-timeline-progress {
 	left: 0;
 	width: calc(var(--jtpp-progress) * 100%);
+	overflow: hidden;
 	background: color-mix(in srgb, var(--jtpp-accent) 78%, transparent);
+}
+
+// Progress shimmer: a barely-perceptible sheen drifting across the played
+// portion while playing only. Disabled for reduced-motion users below.
+.jtpp.is-playing .jtpp-timeline-progress::after {
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(90deg, transparent, color-mix(in srgb, #fff 26%, transparent), transparent);
+	background-size: 200% 100%;
+	content: "";
+	pointer-events: none;
+	animation: jtpp-progress-shimmer 2.8s linear infinite;
+}
+
+@keyframes jtpp-progress-shimmer {
+
+	from {
+		background-position: 150% 0;
+	}
+
+	to {
+		background-position: -50% 0;
+	}
 }
 
 .jtpp-timeline-playhead {
@@ -481,6 +566,12 @@
 @media (prefers-reduced-motion: reduce) {
 
 	.jtpp-timeline-gradient {
+		animation: none;
+	}
+
+	// The shimmer pseudo carries no meaning; drop it entirely at rest.
+	.jtpp.is-playing .jtpp-timeline-progress::after {
+		content: none;
 		animation: none;
 	}
 }

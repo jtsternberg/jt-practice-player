@@ -323,6 +323,7 @@ function render_player( array $tracks, array $options ): string {
 	</ol>
 	<?php endif; ?>
 	<div class="jtpp-panel">
+		<div class="jtpp-artwork-glow" aria-hidden="true"></div>
 		<div class="jtpp-now-playing">
 			<img class="jtpp-artwork" alt="" hidden />
 			<div class="jtpp-now-copy">

@@ -320,12 +320,14 @@
 }
 
 .jtpp-artwork {
-	width: 64px;
-	height: 64px;
-	flex: 0 0 64px;
-	border-radius: 7px;
+	width: 84px;
+	height: 84px;
+	flex: 0 0 84px;
+	border-radius: 10px;
 	object-fit: cover;
-	box-shadow: 0 1px 0 color-mix(in srgb, currentcolor 12%, transparent);
+	box-shadow:
+		0 1px 2px color-mix(in srgb, #000 18%, transparent),
+		0 0 0 1px color-mix(in srgb, currentcolor 8%, transparent);
 }
 
 .jtpp-now-copy {
@@ -347,6 +349,12 @@
 	display: flex;
 	align-items: center;
 	gap: 10px;
+	min-height: 0;
+
+	// Tuck the bar flush against the timeline instead of standing as its own
+	// full-height row: eat most of the surrounding grid gap.
+	margin-top: -6px;
+	margin-bottom: -6px;
 }
 
 .jtpp-loop-help {
@@ -360,23 +368,29 @@
 	display: none;
 }
 
-.jtpp-loop-edit,
-.jtpp-loop-edit-done {
+// `.jtpp` prefix keeps these ahead of themes that style bare `button`
+// elements inside prose content (e.g. `.dw-prose button`).
+.jtpp .jtpp-loop-edit,
+.jtpp .jtpp-loop-edit-done {
 	margin-left: auto;
-	padding: 6px 14px;
+	padding: 3px 11px;
 	border: 1px solid var(--jtpp-line);
 	border-radius: 999px;
-	color: inherit;
-	font-size: 0.82rem;
-	font-weight: 650;
-	background: color-mix(in srgb, currentcolor 4%, transparent);
+	color: var(--jtpp-muted);
+	font-size: 0.72rem;
+	font-weight: 600;
+	letter-spacing: 0.01em;
+	background: transparent;
+	box-shadow: none;
 	cursor: pointer;
+	transition: color 0.15s ease, border-color 0.15s ease;
 }
 
-.jtpp-loop-edit:hover,
-.jtpp-loop-edit-done:hover,
-.jtpp-loop-edit:focus-visible,
-.jtpp-loop-edit-done:focus-visible {
+.jtpp .jtpp-loop-edit:hover,
+.jtpp .jtpp-loop-edit-done:hover,
+.jtpp .jtpp-loop-edit:focus-visible,
+.jtpp .jtpp-loop-edit-done:focus-visible {
+	color: var(--jtpp-accent);
 	border-color: var(--jtpp-accent);
 	outline: none;
 }
@@ -1343,9 +1357,9 @@
 	}
 
 	.jtpp-artwork {
-		width: 56px;
-		height: 56px;
-		flex-basis: 56px;
+		width: 68px;
+		height: 68px;
+		flex-basis: 68px;
 	}
 
 	.jtpp-loop-current,

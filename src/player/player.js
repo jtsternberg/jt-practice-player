@@ -2,7 +2,7 @@ import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js';
 import { createAudioTransport } from './audio-transport';
 import { createMediaSessionAdapter } from './media-session';
-import { timeFromPointer } from './timeline';
+import { timeFromPointer, waveformEligible, isAbortError } from './timeline';
 import {
 	loopJumpTarget,
 	clampSeek,
@@ -145,6 +145,13 @@ export class PracticePlayer {
 		this.scrubbing = false;
 		this.waveSurfer = null;
 		this.regions = null;
+		// Waveform data is only fetched/decoded for a visible, on-screen loop
+		// edit session. Assume on-screen until the observer proves otherwise so
+		// the very first Set loop click is never dropped on a timing race.
+		this.intersecting = true;
+		this.intersectionObserver = null;
+		this.peakToken = 0;
+		this.peakAbortController = null;
 		this.zoomPxPerSec = 0;
 		this.loopFocusZoomPxPerSec = 0;
 		this.saveTimer = null;
@@ -166,6 +173,7 @@ export class PracticePlayer {
 		this.restoreOrder();
 		this.bindControls();
 		this.bindStickyPlayer();
+		this.observeIntersection();
 		this.restoreQueue();
 		this.loadTrack( 0, false );
 		this.hydrateUserSavedLoops();
@@ -480,10 +488,80 @@ export class PracticePlayer {
 		if ( this.loopEditDoneButton ) {
 			this.loopEditDoneButton.hidden = false;
 		}
+		// Only now — an explicit, visible request — is waveform work eligible.
+		this.ensureWaveformForLoopEditing();
 		if ( this.loop ) {
 			this.focusLoopZoom();
 		}
 		this.requestStickyUpdate();
+	}
+
+	ensureWaveformForLoopEditing() {
+		if (
+			! this.loopEditing ||
+			this.waveSurfer ||
+			! this.transport ||
+			! this.waveformEl
+		) {
+			return;
+		}
+		const eligible = waveformEligible( {
+			visible: document.visibilityState === 'visible',
+			intersecting: this.intersecting,
+			loopEditing: this.loopEditing,
+			current: true,
+		} );
+		if ( ! eligible ) {
+			// Intent is recorded; retried on visibility/intersection change.
+			return;
+		}
+		this.createWaveform( this.currentTrack() );
+	}
+
+	createWaveform( track ) {
+		this.regions = RegionsPlugin.create();
+		this.waveSurfer = WaveSurfer.create( {
+			container: this.waveformEl,
+			// Attach to the same native audio element that the transport owns
+			// so playback and position stay unified across attachment.
+			media: this.transport.audio,
+			height: WAVEFORM_HEIGHT,
+			normalize: true,
+			waveColor: WAVE_COLOR,
+			progressColor: PROGRESS_COLOR,
+			cursorColor: CURSOR_COLOR,
+			cursorWidth: 3,
+			plugins: [ this.regions ],
+		} );
+		this.setWaveformLoading( true );
+		this.regions.enableDragSelection( {
+			color: REGION_COLOR,
+			drag: true,
+			resize: true,
+			minLength: 0.2,
+		} );
+		this.bindWaveSurferEvents();
+		// Reflect any loop that already exists for this track (restored or
+		// created before the waveform was attached).
+		this.hydrateLoopRegion();
+		this.loadWaveformPeaks( track );
+	}
+
+	hydrateLoopRegion() {
+		if ( ! this.loop || ! this.regions || this.region ) {
+			return;
+		}
+		this.restoring = true;
+		this.region = this.regions.addRegion( {
+			start: this.loop.start,
+			end: this.loop.end,
+			color: REGION_COLOR,
+			drag: true,
+			resize: true,
+			minLength: 0.2,
+		} );
+		this.attachRegionClear( this.region );
+		this.restoring = false;
 	}
 
 	exitLoopEditMode() {
@@ -514,6 +592,24 @@ export class PracticePlayer {
 		} );
 		window.addEventListener( 'resize', this.requestStickyUpdate );
 		this.requestStickyUpdate();
+	}
+
+	observeIntersection() {
+		if ( typeof window.IntersectionObserver !== 'function' ) {
+			return;
+		}
+		this.intersectionObserver = new window.IntersectionObserver(
+			( entries ) => {
+				this.intersecting = entries.some(
+					( entry ) => entry.isIntersecting
+				);
+				if ( this.intersecting ) {
+					// A deferred loop-edit intent can now be honored on-screen.
+					this.ensureWaveformForLoopEditing();
+				}
+			}
+		);
+		this.intersectionObserver.observe( this.rootEl );
 	}
 
 	requestStickyUpdate = () => {
@@ -697,40 +793,22 @@ export class PracticePlayer {
 		this.loopFocusZoomPxPerSec = 0;
 		this.waveformReady = false;
 		this.trackStateRestored = false;
+		// New request identity so stale peak responses are discarded.
+		this.peakToken += 1;
 		this.setFallbackMode( false );
 		this.updateActiveTrack();
 		this.reflectLoopTools();
-		this.createWaveSurfer( this.tracks[ index ], autoplay );
+		// Only the native audio transport and compact timeline are set up here;
+		// WaveSurfer is deferred until an explicit, visible loop edit session.
+		this.setupTransport( this.tracks[ index ], autoplay );
 	}
 
-	createWaveSurfer( track, autoplay ) {
-		this.regions = RegionsPlugin.create();
+	setupTransport( track, autoplay ) {
 		this.nativeAudio = this.getTrackAudio( track );
 		this.transport = createAudioTransport( this.nativeAudio );
 		this.transport.setVolume( this.volume );
-		this.waveSurfer = WaveSurfer.create( {
-			container: this.waveformEl,
-			media: this.nativeAudio,
-			height: WAVEFORM_HEIGHT,
-			normalize: true,
-			waveColor: WAVE_COLOR,
-			progressColor: PROGRESS_COLOR,
-			cursorColor: CURSOR_COLOR,
-			cursorWidth: 3,
-			plugins: [ this.regions ],
-		} );
-		this.setWaveformLoading( true );
-		this.regions.enableDragSelection( {
-			color: REGION_COLOR,
-			drag: true,
-			resize: true,
-			minLength: 0.2,
-		} );
-
 		this.bindTransportEvents();
-		this.bindWaveSurferEvents();
 		this.bindNativeAudioEvents( track, autoplay );
-		this.loadWaveformPeaks( track );
 		if ( this.nativeAudio.readyState === 0 ) {
 			this.nativeAudio.load();
 		}
@@ -957,35 +1035,25 @@ export class PracticePlayer {
 			return;
 		}
 
-		this.restoring = true;
 		if (
 			Number.isFinite( state.loopStart ) &&
 			Number.isFinite( state.loopEnd )
 		) {
-			this.region = this.regions.addRegion( {
-				start: state.loopStart,
-				end: state.loopEnd,
-				color: REGION_COLOR,
-				drag: true,
-				resize: true,
-				minLength: 0.2,
-			} );
+			// The loop lives on `this.loop` independent of any waveform region,
+			// so it plays, toggles, and clears without loop edit mode. The
+			// visual region is only added if the waveform already exists.
 			this.loop = {
 				start: state.loopStart,
 				end: state.loopEnd,
 				on: true,
 			};
-			this.attachRegionClear( this.region );
+			this.hydrateLoopRegion();
 		}
-		this.restoring = false;
 
 		this.applyRate( state.rate || 1 );
-		if (
-			Number.isFinite( state.loopStart ) &&
-			Number.isFinite( state.loopEnd )
-		) {
+		if ( this.loop ) {
 			this.transport?.seekTo(
-				clampSeek( state.loopStart, this.transport.snapshot().duration )
+				clampSeek( this.loop.start, this.transport.snapshot().duration )
 			);
 			this.focusLoopZoom();
 		} else {
@@ -1180,7 +1248,21 @@ export class PracticePlayer {
 	}
 
 	clearLoopRegion() {
-		this.region?.remove();
+		if ( this.region ) {
+			// region-removed handling resets loop/zoom/tools.
+			this.region.remove();
+			return;
+		}
+		// No waveform region present; clear the loop state directly so loops can
+		// be cleared without entering loop edit mode.
+		if ( ! this.loop ) {
+			return;
+		}
+		this.loop = null;
+		this.resetZoom();
+		this.reflectLoopTools();
+		this.scheduleSave();
+		this.requestStickyUpdate();
 	}
 
 	openLoopSaveEditor() {
@@ -1263,7 +1345,7 @@ export class PracticePlayer {
 	}
 
 	restoreSavedLoop( id ) {
-		if ( ! id || ! this.waveSurfer || ! this.regions ) {
+		if ( ! id ) {
 			this.reflectLoopTools();
 			return;
 		}
@@ -1274,23 +1356,27 @@ export class PracticePlayer {
 			this.reflectLoopTools();
 			return;
 		}
-		this.restoring = true;
-		this.region?.remove();
-		this.region = this.regions.addRegion( {
-			start: savedLoop.start,
-			end: savedLoop.end,
-			color: REGION_COLOR,
-			drag: true,
-			resize: true,
-			minLength: 0.2,
-		} );
 		this.loop = {
 			start: savedLoop.start,
 			end: savedLoop.end,
 			on: true,
 		};
-		this.attachRegionClear( this.region );
-		this.restoring = false;
+		// Restoring a cue works without loop edit mode; the visual region is
+		// only (re)built when the waveform is already attached.
+		if ( this.regions ) {
+			this.restoring = true;
+			this.region?.remove();
+			this.region = this.regions.addRegion( {
+				start: savedLoop.start,
+				end: savedLoop.end,
+				color: REGION_COLOR,
+				drag: true,
+				resize: true,
+				minLength: 0.2,
+			} );
+			this.attachRegionClear( this.region );
+			this.restoring = false;
+		}
 		this.applyRate( savedLoop.rate || 1 );
 		this.seekLoopStart();
 		this.focusLoopZoom();
@@ -1500,7 +1586,9 @@ export class PracticePlayer {
 	}
 
 	reflectLoopTools( selectedSavedLoop = '' ) {
-		const hasSelection = Boolean( this.loop && this.region );
+		// A loop exists independently of any waveform region, so tools reflect
+		// `this.loop` alone — loops stay toggleable/clearable without edit mode.
+		const hasSelection = Boolean( this.loop );
 		const savedLoops = this.currentTrack()
 			? this.getSavedLoops( this.currentTrack().id )
 			: [];
@@ -1837,7 +1925,12 @@ export class PracticePlayer {
 	onVisibilityChange = () => {
 		if ( document.visibilityState === 'hidden' ) {
 			this.flushState();
+			// Never fetch/decode waveform data while backgrounded.
+			this.abortPeakRequest();
+			return;
 		}
+		// Back in the foreground: honor any pending loop-edit intent.
+		this.ensureWaveformForLoopEditing();
 	};
 
 	showFallback() {
@@ -1897,24 +1990,51 @@ export class PracticePlayer {
 	}
 
 	async loadWaveformPeaks( track ) {
+		const token = this.peakToken;
 		const cached = PEAK_CACHE.get( track.url );
 		if ( cached ) {
-			this.applyWaveformPeaks( track, cached );
+			this.applyWaveformPeaks( track, cached, token );
 			return;
 		}
+		// One AbortController per pending request; supersede any in flight.
+		this.abortPeakRequest();
+		const controller = new AbortController();
+		this.peakAbortController = controller;
 		try {
-			const peaks = await getTrackPeaks( track.url );
-			cacheTrackPeaks( track.url, peaks );
-			this.applyWaveformPeaks( track, peaks );
+			const peaks = await getTrackPeaks( track.url, controller.signal );
+			this.applyWaveformPeaks( track, peaks, token );
 		} catch ( error ) {
-			if ( this.currentTrack()?.url === track.url ) {
+			// An abort is a cancellation (track change, hide, destroy, or a
+			// superseding request), not a waveform failure.
+			if ( isAbortError( error ) ) {
+				return;
+			}
+			if (
+				token === this.peakToken &&
+				this.currentTrack()?.url === track.url
+			) {
 				this.setWaveformUnavailable();
+			}
+		} finally {
+			if ( this.peakAbortController === controller ) {
+				this.peakAbortController = null;
 			}
 		}
 	}
 
-	applyWaveformPeaks( track, peaks ) {
-		if ( this.currentTrack()?.url !== track.url || ! this.waveSurfer ) {
+	abortPeakRequest() {
+		this.peakAbortController?.abort();
+		this.peakAbortController = null;
+	}
+
+	applyWaveformPeaks( track, peaks, token ) {
+		// Guard by both request token and URL so a stale/superseded response is
+		// discarded rather than painted onto the current waveform.
+		if (
+			token !== this.peakToken ||
+			this.currentTrack()?.url !== track.url ||
+			! this.waveSurfer
+		) {
 			return;
 		}
 		this.waveformReady = true;
@@ -1923,7 +2043,6 @@ export class PracticePlayer {
 			duration: peaks.duration,
 		} );
 		this.setWaveformLoading( false );
-		this.restoreTrackStateOnce();
 		if ( this.loop ) {
 			this.focusLoopZoom();
 		}
@@ -1950,12 +2069,18 @@ export class PracticePlayer {
 
 	destroyWaveSurfer() {
 		this.clearWaveformLoadingTimer();
+		// Cancel any in-flight peak fetch/decode for the outgoing track.
+		this.abortPeakRequest();
 		this.transportUnbinders.forEach( ( off ) => off() );
 		this.transportUnbinders = [];
 		this.nativeAudio?.pause();
 		if ( this.waveSurfer ) {
 			this.waveSurfer.destroy();
 		}
+		this.waveSurfer = null;
+		this.regions = null;
+		this.region = null;
+		this.waveformReady = false;
 		this.transport = null;
 		this.nativeAudio = null;
 		if ( this.waveformEl ) {
@@ -1966,14 +2091,14 @@ export class PracticePlayer {
 	}
 }
 
-async function getTrackPeaks( url ) {
+async function getTrackPeaks( url, signal ) {
 	if ( PEAK_CACHE.has( url ) ) {
 		return PEAK_CACHE.get( url );
 	}
 	if ( PEAK_PROMISES.has( url ) ) {
 		return PEAK_PROMISES.get( url );
 	}
-	const promise = fetchTrackPeaks( url )
+	const promise = fetchTrackPeaks( url, signal )
 		.then( ( peaks ) => {
 			cacheTrackPeaks( url, peaks );
 			return peaks;
@@ -1983,8 +2108,8 @@ async function getTrackPeaks( url ) {
 	return promise;
 }
 
-async function fetchTrackPeaks( url ) {
-	const response = await fetch( url );
+async function fetchTrackPeaks( url, signal ) {
+	const response = await fetch( url, { signal } );
 	if ( response.status >= 400 ) {
 		throw new Error( `Failed to fetch ${ url }: ${ response.status }` );
 	}

@@ -43,3 +43,15 @@ export function waveformEligible( state ) {
 			state.current
 	);
 }
+
+/**
+ * Determine whether a rejected peak request was cancelled (aborted) rather than
+ * a genuine waveform failure. Aborts happen on track change, page hide, player
+ * destruction, or a superseding request; they must not surface as an error.
+ *
+ * @param {*} error Rejection value from a fetch/decode pipeline.
+ * @return {boolean} Whether the rejection represents a cancellation.
+ */
+export function isAbortError( error ) {
+	return Boolean( error ) && error.name === 'AbortError';
+}

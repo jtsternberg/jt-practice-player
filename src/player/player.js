@@ -4,6 +4,11 @@ import { createAudioTransport } from './audio-transport';
 import { createMediaSessionAdapter } from './media-session';
 import { timeFromPointer, waveformEligible, isAbortError } from './timeline';
 import {
+	buttonTargetHandlesKey,
+	targetAcceptsText,
+	shouldHandleGlobalSpace,
+} from './keyboard';
+import {
 	loopJumpTarget,
 	clampSeek,
 	nextSpeed,
@@ -55,16 +60,6 @@ const PLAY_ICON =
 const PAUSE_ICON =
 	'<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5v14"></path><path d="M16 5v14"></path></svg>';
 
-function buttonTargetHandlesKey( target, key ) {
-	return target?.closest?.( 'button' ) && ( key === ' ' || key === 'Enter' );
-}
-
-function targetAcceptsText( target ) {
-	return target?.closest?.(
-		'input, textarea, select, [contenteditable=""], [contenteditable="true"]'
-	);
-}
-
 function bindGlobalKeyboard() {
 	if ( keyboardBound ) {
 		return;
@@ -87,6 +82,14 @@ function bindGlobalKeyboard() {
 			return;
 		}
 		if ( targetAcceptsText( event.target ) ) {
+			return;
+		}
+		// Space toggles playback page-wide (like YouTube/Spotify), regardless
+		// of where focus is — the button-target and text-input guards above
+		// already carved out the cases where space must do something else.
+		if ( shouldHandleGlobalSpace( event.target, event.key ) ) {
+			event.preventDefault();
+			activePlayer.togglePlay();
 			return;
 		}
 		// Only claim keyboard shortcuts (arrows, space, etc.) when focus is

@@ -4,7 +4,7 @@
 
 Improve the practice player’s lock-screen, Bluetooth, and CarPlay experience while avoiding unnecessary waveform downloads and decoding during background playback.
 
-The native audio element becomes the source of truth for transport. WaveSurfer remains the interactive waveform and loop-region view, but it may attach or detach without interrupting audio. Media Session metadata, actions, playback state, and position remain synchronized with the active player.
+The native audio element becomes the source of truth for transport. The default compact timeline supports seeking and drag-scrubbing without downloading waveform data. WaveSurfer loads only when the user explicitly enters loop edit mode, and it may attach without interrupting audio. Media Session metadata, actions, playback state, and position remain synchronized with the active player.
 
 This design covers Media Session and lightweight/background playback. The broader keyboard-navigation and mobile-layout audit remains separate follow-up work.
 
@@ -13,8 +13,10 @@ This design covers Media Session and lightweight/background playback. The broade
 - Show the current song title, artist, playlist context, and artwork in CarPlay and other system media surfaces.
 - Expose every relevant Media Session action supported by the browser and receiving device.
 - Keep system progress, playback state, position, duration, and playback speed accurate.
-- Avoid fetching and decoding waveform peaks while the page is hidden or while the user has disabled waveform loading.
+- Avoid fetching and decoding waveform peaks until a visible user explicitly enters loop edit mode.
 - Allow the waveform to initialize after playback begins without restarting or losing position.
+- Make dragging scrub playback by default so users cannot accidentally create loop regions.
+- Make loop creation and boundary changes an explicit, discoverable editing mode.
 - Preserve playlist, queue, repeat, loop, speed, and persistence behavior.
 
 ## Non-goals
@@ -98,16 +100,49 @@ WaveSurfer receives the same native audio element through its `media` option, bu
 
 Loop enforcement and persisted playback state use transport time rather than requiring a mounted WaveSurfer instance. The waveform’s Regions plugin continues to create and edit loop boundaries when mounted.
 
+## Timeline and loop interaction
+
+### Normal playback mode
+
+The compact timeline uses the hybrid visual direction: a thin, restrained animated gradient with clear playback progress and current/duration labels. Motion remains subtle and respects `prefers-reduced-motion`.
+
+- Tapping positions the playhead.
+- Dragging continuously scrubs the playhead.
+- No pointer gesture creates or changes a loop.
+- An existing loop can be enabled, disabled, restored from saved cues, or cleared without loading the waveform.
+- A visible **Set loop** action appears when no loop exists.
+- A visible **Edit loop** action appears when a loop exists.
+
+There are no **Show waveform**, **Hide waveform**, **Restore waveform**, **Skip waveform loading**, or equivalent user-facing controls. Waveform loading is an implementation detail governed by user intent.
+
+### Loop edit mode
+
+Selecting **Set loop** or **Edit loop** enters loop edit mode and immediately begins loading the detailed waveform. Double-click may enter loop edit mode as an optional desktop shortcut, but it is not the primary or required path. Double-tap is not required.
+
+While the waveform is loading, keep native audio controls usable and show a clear loading state in the timeline area. When ready, attach WaveSurfer to the existing native audio element without changing its source, playback position, rate, volume, loop state, or playing/paused state.
+
+In loop edit mode:
+
+- Dragging empty waveform space creates a loop selection.
+- Dragging the selected region moves it.
+- Dragging either boundary handle resizes it.
+- Tapping positions the playhead without replacing or moving the selection.
+- Helper text above the interaction area reads: **Drag to select a section. Tap to position the playhead.**
+- A visible **Done** action exits loop edit mode.
+- `Escape` exits loop edit mode when focus is within the player.
+
+Exiting loop edit mode preserves the detailed waveform for the remainder of the page session. It does not fetch or decode it again for the same cached track. Changing tracks returns to the compact timeline; the new track waveform loads only if the user enters loop edit mode for that track.
+
 ## Waveform loading policy
 
 Waveform work may begin only when all of these are true:
 
 - The page is visible.
 - The player is in or near the viewport.
-- The user has not enabled **Skip waveform loading**.
+- The user has explicitly entered loop edit mode.
 - The current track still matches the pending request.
 
-Use `IntersectionObserver` with a modest preloading margin so the waveform is ready shortly before the player scrolls onscreen.
+The compact timeline itself never requires waveform peaks. Use `IntersectionObserver` to determine whether a player is visible enough to begin requested waveform work. Entering loop edit mode while the player is visible satisfies the user-intent condition immediately.
 
 When the page becomes hidden:
 
@@ -117,17 +152,7 @@ When the page becomes hidden:
 - Completed cached peaks remain available.
 - An already-running `decodeAudioData()` operation may finish because the platform does not provide a reliable cancellation mechanism, but its result must not update a stale track or hidden waveform.
 
-When the page becomes visible again, the waveform initializes only when its player is near the viewport. It attaches to the existing audio element and reflects the current time, rate, loop, and playback state.
-
-## User preference
-
-Expose a persistent player control labeled **Skip waveform loading** with this explanation:
-
-> Play audio without downloading and processing the interactive waveform.
-
-This preference affects waveform fetching and rendering only. It does not change audio quality, Media Session integration, playback controls, or saved loop enforcement.
-
-Store the preference locally and apply it across practice-player blocks on the same browser. Enabling it aborts pending waveform fetches and detaches the waveform without interrupting audio. Disabling it allows lazy initialization when the visibility and viewport conditions are satisfied.
+When the page becomes visible again, it remains on the compact timeline. A waveform requested before the page was hidden may resume or restart only if that same player is still in loop edit mode and near the viewport. Background and CarPlay track changes never initiate waveform work.
 
 ## Component boundaries
 
@@ -165,16 +190,21 @@ The existing `PracticePlayer` coordinates tracks, queue behavior, persistence, v
 - Media Session action routing and unsupported-action isolation.
 - Seek offset handling, exact seeks, clamping, and stop behavior.
 - Position-state validation and playback-state mapping.
-- Waveform eligibility from visibility, intersection, and user preference.
+- Default timeline tap seeking and continuous drag-scrubbing.
+- Loop regions cannot be created or modified outside loop edit mode.
+- Set loop/Edit loop entry, Done/Escape exit, and helper-text state.
+- Waveform eligibility from visibility, intersection, current track, and loop edit mode.
 - Stale or aborted peak requests cannot update the current player.
-- Waveform detachment does not pause or reset native audio.
+- Waveform attachment does not pause or reset native audio.
 
 ### Browser verification
 
-- Normal desktop and mobile playback with the waveform mounted.
+- Normal desktop and mobile playback uses the compact timeline; tap seeks and drag scrubs without creating a loop.
+- Enter loop edit mode and confirm the waveform loads without interrupting playback.
+- Create, move, and resize a loop; tap the waveform and confirm it seeks without replacing the loop.
+- Exit with Done and Escape; confirm the loop remains active and can be toggled without edit mode.
 - Start playback, hide/lock the page, and advance several tracks without additional waveform fetches.
-- Return to the page and confirm lazy waveform initialization at the current position.
-- Toggle **Skip waveform loading** during playback in both directions without interruption.
+- Return to the page and confirm it remains on the compact timeline until loop editing is requested.
 - Confirm two player blocks do not fight over Media Session ownership.
 - Confirm system metadata changes with the active track.
 - Confirm play, pause, seek, previous, next, progress, and speed remain synchronized where supported.

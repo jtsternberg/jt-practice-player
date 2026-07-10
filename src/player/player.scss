@@ -343,6 +343,117 @@
 	font-size: 0.92rem;
 }
 
+.jtpp-loop-mode-bar {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.jtpp-loop-help {
+	flex: 1;
+	margin: 0;
+	color: var(--jtpp-muted);
+	font-size: 0.82rem;
+}
+
+.jtpp-loop-help[hidden] {
+	display: none;
+}
+
+.jtpp-loop-edit,
+.jtpp-loop-edit-done {
+	margin-left: auto;
+	padding: 6px 14px;
+	border: 1px solid var(--jtpp-line);
+	border-radius: 999px;
+	color: inherit;
+	font-size: 0.82rem;
+	font-weight: 650;
+	background: color-mix(in srgb, currentcolor 4%, transparent);
+	cursor: pointer;
+}
+
+.jtpp-loop-edit:hover,
+.jtpp-loop-edit-done:hover,
+.jtpp-loop-edit:focus-visible,
+.jtpp-loop-edit-done:focus-visible {
+	border-color: var(--jtpp-accent);
+	outline: none;
+}
+
+.jtpp-loop-edit[hidden],
+.jtpp-loop-edit-done[hidden] {
+	display: none;
+}
+
+.jtpp-timeline {
+	--jtpp-progress: 0;
+
+	position: relative;
+	height: 40px;
+	cursor: pointer;
+	touch-action: none;
+}
+
+.jtpp-timeline:focus-visible {
+	outline: 2px solid var(--jtpp-accent);
+	outline-offset: 2px;
+	border-radius: 8px;
+}
+
+.jtpp-timeline-gradient,
+.jtpp-timeline-progress {
+	position: absolute;
+	top: 50%;
+	height: 12px;
+	border-radius: 999px;
+	transform: translateY(-50%);
+	pointer-events: none;
+}
+
+.jtpp-timeline-gradient {
+	right: 0;
+	left: 0;
+	background:
+		linear-gradient(90deg, color-mix(in srgb, var(--jtpp-accent) 20%, transparent), color-mix(in srgb, var(--jtpp-loop) 20%, transparent)),
+		color-mix(in srgb, currentcolor 8%, transparent);
+	background-size: 200% 100%, auto;
+	animation: jtpp-timeline-drift 6s linear infinite;
+}
+
+.jtpp-timeline-progress {
+	left: 0;
+	width: calc(var(--jtpp-progress) * 100%);
+	background: color-mix(in srgb, var(--jtpp-accent) 78%, transparent);
+}
+
+.jtpp-timeline-playhead {
+	position: absolute;
+	top: 50%;
+	left: calc(var(--jtpp-progress) * 100%);
+	width: 3px;
+	height: 20px;
+	border-radius: 999px;
+	background: var(--jtpp-playhead);
+	box-shadow: 0 0 0 1px #fff;
+	transform: translate(-50%, -50%);
+	pointer-events: none;
+}
+
+@keyframes jtpp-timeline-drift {
+
+	to {
+		background-position: 200% 0, 0 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+	.jtpp-timeline-gradient {
+		animation: none;
+	}
+}
+
 .jtpp-waveform {
 	position: relative;
 	height: 106px;

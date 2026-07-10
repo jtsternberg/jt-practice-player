@@ -2,6 +2,7 @@ import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js';
 import { createAudioTransport } from './audio-transport';
 import { createMediaSessionAdapter } from './media-session';
+import { timeFromPointer } from './timeline';
 import {
 	loopJumpTarget,
 	clampSeek,
@@ -140,6 +141,8 @@ export class PracticePlayer {
 		this.dragIndex = null;
 		this.loop = null;
 		this.region = null;
+		this.loopEditing = false;
+		this.scrubbing = false;
 		this.waveSurfer = null;
 		this.regions = null;
 		this.zoomPxPerSec = 0;
@@ -226,6 +229,18 @@ export class PracticePlayer {
 			this.rootEl.querySelectorAll( '.jtpp-queue-check' )
 		);
 		this.waveformEl = this.rootEl.querySelector( '.jtpp-waveform' );
+		this.timelineEl = this.rootEl.querySelector( '.jtpp-timeline' );
+		this.timelineProgressEl = this.rootEl.querySelector(
+			'.jtpp-timeline-progress'
+		);
+		this.timelinePlayheadEl = this.rootEl.querySelector(
+			'.jtpp-timeline-playhead'
+		);
+		this.loopHelpEl = this.rootEl.querySelector( '.jtpp-loop-help' );
+		this.loopEditButton = this.rootEl.querySelector( '.jtpp-loop-edit' );
+		this.loopEditDoneButton = this.rootEl.querySelector(
+			'.jtpp-loop-edit-done'
+		);
 		this.fallbackEl = this.rootEl.querySelector( '.jtpp-fallback' );
 		this.panelEl = this.rootEl.querySelector( '.jtpp-panel' );
 		this.controlsEl = this.rootEl.querySelector( '.jtpp-controls' );
@@ -337,6 +352,8 @@ export class PracticePlayer {
 			} );
 		} );
 
+		this.bindTimeline();
+
 		this.bindReordering();
 
 		this.queueChecks.forEach( ( check ) => {
@@ -368,6 +385,123 @@ export class PracticePlayer {
 		document.addEventListener( 'fullscreenchange', () =>
 			this.reflectFullscreen()
 		);
+	}
+
+	bindTimeline() {
+		this.loopEditButton?.addEventListener( 'click', () =>
+			this.enterLoopEditMode()
+		);
+		this.loopEditDoneButton?.addEventListener( 'click', () =>
+			this.exitLoopEditMode()
+		);
+		if ( ! this.timelineEl ) {
+			return;
+		}
+		this.timelineEl.addEventListener( 'pointerdown', ( event ) =>
+			this.onTimelinePointerDown( event )
+		);
+		this.timelineEl.addEventListener( 'pointermove', ( event ) =>
+			this.onTimelinePointerMove( event )
+		);
+		this.timelineEl.addEventListener( 'pointerup', ( event ) =>
+			this.onTimelinePointerUp( event )
+		);
+		this.timelineEl.addEventListener( 'pointercancel', ( event ) =>
+			this.onTimelinePointerUp( event )
+		);
+		this.timelineEl.addEventListener( 'keydown', ( event ) =>
+			this.onTimelineKeyDown( event )
+		);
+	}
+
+	onTimelinePointerDown( event ) {
+		if ( ! this.transport ) {
+			return;
+		}
+		this.scrubbing = true;
+		this.timelineEl.setPointerCapture?.( event.pointerId );
+		this.seekToPointer( event );
+	}
+
+	onTimelinePointerMove( event ) {
+		if ( ! this.scrubbing ) {
+			return;
+		}
+		this.seekToPointer( event );
+	}
+
+	onTimelinePointerUp( event ) {
+		if ( ! this.scrubbing ) {
+			return;
+		}
+		this.scrubbing = false;
+		this.timelineEl.releasePointerCapture?.( event.pointerId );
+	}
+
+	seekToPointer( event ) {
+		if ( ! this.transport ) {
+			return;
+		}
+		const rect = this.timelineEl.getBoundingClientRect();
+		const { duration } = this.transport.snapshot();
+		this.seekTo( timeFromPointer( event.clientX, rect, duration ) );
+	}
+
+	onTimelineKeyDown( event ) {
+		const handlers = {
+			ArrowLeft: () => this.skip( event.shiftKey ? -15 : -5 ),
+			ArrowRight: () => this.skip( event.shiftKey ? 15 : 5 ),
+			Home: () => this.seekStart(),
+			End: () => this.seekTo( this.transport?.snapshot().duration ?? 0 ),
+		};
+		const handler = handlers[ event.key ];
+		if ( ! handler ) {
+			return;
+		}
+		// Handle here and stop the document-level shortcut handler from
+		// double-seeking while the timeline slider itself is focused.
+		event.preventDefault();
+		event.stopPropagation();
+		handler();
+	}
+
+	enterLoopEditMode() {
+		this.loopEditing = true;
+		this.rootEl.classList.add( 'is-loop-editing' );
+		if ( this.waveformEl ) {
+			this.waveformEl.hidden = false;
+		}
+		if ( this.loopHelpEl ) {
+			this.loopHelpEl.hidden = false;
+		}
+		if ( this.loopEditButton ) {
+			this.loopEditButton.hidden = true;
+		}
+		if ( this.loopEditDoneButton ) {
+			this.loopEditDoneButton.hidden = false;
+		}
+		if ( this.loop ) {
+			this.focusLoopZoom();
+		}
+		this.requestStickyUpdate();
+	}
+
+	exitLoopEditMode() {
+		this.loopEditing = false;
+		this.rootEl.classList.remove( 'is-loop-editing' );
+		if ( this.waveformEl ) {
+			this.waveformEl.hidden = true;
+		}
+		if ( this.loopHelpEl ) {
+			this.loopHelpEl.hidden = true;
+		}
+		if ( this.loopEditButton ) {
+			this.loopEditButton.hidden = false;
+		}
+		if ( this.loopEditDoneButton ) {
+			this.loopEditDoneButton.hidden = true;
+		}
+		this.requestStickyUpdate();
 	}
 
 	bindStickyPlayer() {
@@ -554,6 +688,8 @@ export class PracticePlayer {
 		}
 		this.flushState();
 		this.destroyWaveSurfer();
+		// Changing tracks always returns to the compact timeline.
+		this.exitLoopEditMode();
 		this.activeIndex = index;
 		this.loop = null;
 		this.region = null;
@@ -1368,6 +1504,13 @@ export class PracticePlayer {
 		const savedLoops = this.currentTrack()
 			? this.getSavedLoops( this.currentTrack().id )
 			: [];
+		if ( this.loopEditButton ) {
+			// The entry label reflects whether a loop already exists; it never
+			// changes the loop's on/off state.
+			this.loopEditButton.textContent = hasSelection
+				? 'Edit loop'
+				: 'Set loop';
+		}
 		if ( this.loopToolsEl ) {
 			this.loopToolsEl.hidden = ! hasSelection && savedLoops.length === 0;
 		}
@@ -1610,6 +1753,31 @@ export class PracticePlayer {
 		if ( this.totalTimeEl ) {
 			this.totalTimeEl.textContent = formatTime( duration );
 		}
+		this.updateTimelineProgress( position, duration );
+	}
+
+	updateTimelineProgress( position, duration ) {
+		if ( ! this.timelineEl ) {
+			return;
+		}
+		const ratio =
+			duration > 0
+				? Math.min( 1, Math.max( 0, position / duration ) )
+				: 0;
+		this.timelineEl.style.setProperty( '--jtpp-progress', String( ratio ) );
+		this.timelineEl.setAttribute( 'aria-valuemin', '0' );
+		this.timelineEl.setAttribute(
+			'aria-valuemax',
+			String( Math.round( duration ) || 0 )
+		);
+		this.timelineEl.setAttribute(
+			'aria-valuenow',
+			String( Math.round( position ) || 0 )
+		);
+		this.timelineEl.setAttribute(
+			'aria-valuetext',
+			`${ formatTime( position ) } of ${ formatTime( duration ) }`
+		);
 	}
 
 	onKeyDown( event ) {
@@ -1630,6 +1798,11 @@ export class PracticePlayer {
 			MediaTrackPrevious: () => this.advance( -1, true ),
 			MediaTrackNext: () => this.advance( 1, true ),
 		};
+		// Escape exits loop edit mode only while it is active, so it stays out
+		// of the way of native Escape behavior (e.g. exiting fullscreen).
+		if ( this.loopEditing ) {
+			handlers.Escape = () => this.exitLoopEditMode();
+		}
 		const handler = handlers[ event.key ];
 		if ( handler ) {
 			event.preventDefault();
@@ -1760,7 +1933,8 @@ export class PracticePlayer {
 
 	setFallbackMode( fallback ) {
 		if ( this.waveformEl ) {
-			this.waveformEl.hidden = fallback;
+			// The waveform is only visible during an explicit loop edit session.
+			this.waveformEl.hidden = fallback || ! this.loopEditing;
 		}
 		if ( this.controlsEl ) {
 			this.controlsEl.hidden = fallback;

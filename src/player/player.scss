@@ -16,10 +16,27 @@
 	color: var(--jtpp-ink, currentcolor);
 	font-size: clamp(16px, 1rem, 18px);
 	line-height: 1.35;
+
+	// Dragging a loop selection across the waveform/timeline otherwise paints
+	// the browser's native text highlight over the whole player card. Kill
+	// selection on the player chrome; genuine text (track titles, cue names)
+	// opts back in below.
+	user-select: none;
+	-webkit-user-select: none;
 }
 
 .jtpp * {
 	box-sizing: border-box;
+}
+
+// Let the reader still select/copy the text that's meaningfully text.
+.jtpp-track-title,
+.jtpp-track-artist,
+.jtpp-now-title,
+.jtpp-now-meta,
+.jtpp-loop-cue-copy {
+	user-select: text;
+	-webkit-user-select: text;
 }
 
 .jtpp:fullscreen {
@@ -1384,5 +1401,45 @@
 
 	.jtpp-loop-cue-range {
 		display: none;
+	}
+}
+
+// Narrow phones (~360-400px): loop-edit mode gets cramped — help text jams
+// against Done, and the saved-cue row (name + Restore + Delete) squeezes.
+// Give each piece room to breathe.
+@media (max-width: 400px) {
+
+	// Let the help text take a full line above the Set loop / Done button
+	// instead of fighting it for horizontal space.
+	.jtpp-loop-mode-bar {
+		flex-wrap: wrap;
+		margin-top: 0;
+		margin-bottom: 0;
+	}
+
+	.jtpp-loop-help {
+		flex: 1 1 100%;
+	}
+
+	// Reclaim vertical space: a shorter waveform on tiny screens.
+	.jtpp-waveform {
+		height: 84px;
+	}
+
+	// Stack the cue: name/meta across the top, Restore + Delete sharing the
+	// row beneath so neither button gets crushed.
+	.jtpp-loop-cue {
+		grid-template-columns: 1fr auto;
+		gap: 6px 8px;
+	}
+
+	.jtpp-loop-cue-copy {
+		grid-column: 1 / -1;
+	}
+
+	.jtpp-loop-cue-restore,
+	.jtpp-loop-cue-delete {
+		justify-content: center;
+		text-align: center;
 	}
 }

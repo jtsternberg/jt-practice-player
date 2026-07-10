@@ -44,10 +44,6 @@ export function createMediaSessionAdapter( mediaSession, MediaMetadataCtor ) {
 				pause: () => player()?.pause(),
 				previoustrack: () => player()?.previous(),
 				nexttrack: () => player()?.next(),
-				seekbackward: ( event ) =>
-					player()?.seekBy( -( event.seekOffset ?? 15 ) ),
-				seekforward: ( event ) =>
-					player()?.seekBy( event.seekOffset ?? 15 ),
 				seekto: ( event ) => player()?.seekTo( event.seekTime ),
 				stop: () => player()?.stop(),
 			};

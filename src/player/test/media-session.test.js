@@ -41,18 +41,35 @@ describe( 'resolveAlbum', () => {
 } );
 
 describe( 'createMediaSessionAdapter action handlers', () => {
-	it( 'honors requested seek offsets and ignores unsupported handlers', () => {
+	it( 'leaves relative seek actions unregistered so iOS can show track controls', () => {
+		const { mediaSession, handlers } = createStubSession();
+		createMediaSessionAdapter( mediaSession, MediaMetadataStub ).bind(
+			() => ( {
+				previous: jest.fn(),
+				next: jest.fn(),
+				seekTo: jest.fn(),
+			} )
+		);
+
+		expect( handlers.previoustrack ).toBeDefined();
+		expect( handlers.nexttrack ).toBeDefined();
+		expect( handlers.seekbackward ).toBeUndefined();
+		expect( handlers.seekforward ).toBeUndefined();
+		expect( handlers.seekto ).toBeDefined();
+	} );
+
+	it( 'ignores an unsupported handler without blocking supported handlers', () => {
 		const { mediaSession, handlers } = createStubSession( {
 			unsupported: [ 'stop' ],
 		} );
-		const player = { seekBy: jest.fn(), play: jest.fn(), pause: jest.fn() };
+		const player = { play: jest.fn(), pause: jest.fn() };
 		createMediaSessionAdapter( mediaSession, MediaMetadataStub ).bind(
 			() => player
 		);
 
-		handlers.seekbackward( { seekOffset: 10 } );
-		expect( player.seekBy ).toHaveBeenCalledWith( -10 );
 		expect( handlers.play ).toBeDefined();
+		expect( handlers.pause ).toBeDefined();
+		expect( handlers.stop ).toBeUndefined();
 	} );
 
 	it( 'registers later handlers even after an earlier one throws', () => {
@@ -103,19 +120,6 @@ describe( 'createMediaSessionAdapter action handlers', () => {
 		expect( player[ method ] ).toHaveBeenCalledTimes( 1 );
 	} );
 
-	it( 'defaults seek offsets to 15 seconds when none supplied', () => {
-		const { mediaSession, handlers } = createStubSession();
-		const player = { seekBy: jest.fn(), seekTo: jest.fn() };
-		createMediaSessionAdapter( mediaSession, MediaMetadataStub ).bind(
-			() => player
-		);
-
-		handlers.seekbackward( {} );
-		handlers.seekforward( {} );
-		expect( player.seekBy ).toHaveBeenNthCalledWith( 1, -15 );
-		expect( player.seekBy ).toHaveBeenNthCalledWith( 2, 15 );
-	} );
-
 	it( 'passes exact seek time through seekto', () => {
 		const { mediaSession, handlers } = createStubSession();
 		const player = { seekTo: jest.fn() };
@@ -134,9 +138,7 @@ describe( 'createMediaSessionAdapter action handlers', () => {
 		);
 
 		expect( () => handlers.play() ).not.toThrow();
-		expect( () =>
-			handlers.seekbackward( { seekOffset: 5 } )
-		).not.toThrow();
+		expect( () => handlers.seekto( { seekTime: 5 } ) ).not.toThrow();
 	} );
 } );
 

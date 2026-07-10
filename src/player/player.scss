@@ -279,13 +279,63 @@
 }
 
 .jtpp-panel {
+	position: relative;
 	display: grid;
 	gap: 13px;
 	padding: 14px;
 	border: 1px solid var(--jtpp-hairline);
 	border-radius: 8px;
+	// New stacking context so the ambient glow (z-index 0) stays behind the
+	// player's own content (z-index 1) without leaking above sibling blocks.
+	isolation: isolate;
 	background: linear-gradient(180deg, color-mix(in srgb, currentcolor 3%, transparent), transparent 42px);
 	box-shadow: 0 1px 0 color-mix(in srgb, currentcolor 5%, transparent);
+}
+
+// Ambient artwork glow: a blurred, dimmed, scaled copy of the current track's
+// artwork painted behind the panel (Apple Music style). Hidden until a track
+// with artwork loads; the flat card shows through otherwise.
+.jtpp-artwork-glow {
+	position: absolute;
+	z-index: 0;
+	inset: 0;
+	overflow: hidden;
+	border-radius: inherit;
+	opacity: 0;
+	transition: opacity 320ms ease;
+	pointer-events: none;
+}
+
+.jtpp-panel.has-artwork-glow .jtpp-artwork-glow {
+	opacity: 1;
+}
+
+.jtpp-artwork-glow::before {
+	position: absolute;
+	inset: -30%;
+	background-image: inherit;
+	background-position: center;
+	background-size: cover;
+	content: "";
+	opacity: 0.5;
+	filter: blur(36px) saturate(1.3);
+	transform: scale(1.25);
+}
+
+// Theme-aware darkening scrim so title/meta text keeps AA contrast over the
+// glow: Canvas tracks the page background (dark scrim on dark themes, light on
+// light), and the gradient leaves a touch more art visible up top.
+.jtpp-artwork-glow::after {
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(180deg, color-mix(in srgb, Canvas 66%, transparent), color-mix(in srgb, Canvas 82%, transparent));
+	content: "";
+}
+
+// Keep every real child above the glow layer.
+.jtpp-panel.has-artwork-glow > *:not(.jtpp-artwork-glow) {
+	position: relative;
+	z-index: 1;
 }
 
 .jtpp-shell .jtpp-panel {
@@ -352,14 +402,54 @@
 }
 
 .jtpp-now-title {
-	font-size: 1.08rem;
-	font-weight: 730;
+	font-size: 1.24rem;
+	font-weight: 760;
+	letter-spacing: -0.01em;
+	line-height: 1.2;
 }
 
 .jtpp-now-meta {
-	margin-top: 4px;
+	margin-top: 5px;
 	color: var(--jtpp-muted);
-	font-size: 0.92rem;
+	font-size: 0.94rem;
+}
+
+.jtpp-now-context {
+	margin-top: 6px;
+	color: var(--jtpp-muted);
+	font-size: 0.72rem;
+	font-weight: 800;
+	letter-spacing: 0.09em;
+	text-transform: uppercase;
+}
+
+.jtpp-now-context[hidden] {
+	display: none;
+}
+
+// Soft pulse ring around the artwork while playing; the base rounded shadow
+// (from the enlargement work) stays as the resting state. Reduced-motion users
+// keep the static artwork below.
+.jtpp.is-playing .jtpp-artwork {
+	animation: jtpp-artwork-pulse 2.6s ease-in-out infinite;
+}
+
+@keyframes jtpp-artwork-pulse {
+
+	0%,
+	100% {
+		box-shadow:
+			0 1px 2px color-mix(in srgb, #000 18%, transparent),
+			0 0 0 1px color-mix(in srgb, currentcolor 8%, transparent),
+			0 0 0 0 color-mix(in srgb, var(--jtpp-accent) 42%, transparent);
+	}
+
+	50% {
+		box-shadow:
+			0 1px 2px color-mix(in srgb, #000 18%, transparent),
+			0 0 0 1px color-mix(in srgb, currentcolor 8%, transparent),
+			0 0 0 7px color-mix(in srgb, var(--jtpp-accent) 0%, transparent);
+	}
 }
 
 .jtpp-loop-mode-bar {
@@ -455,7 +545,82 @@
 .jtpp-timeline-progress {
 	left: 0;
 	width: calc(var(--jtpp-progress) * 100%);
+	overflow: hidden;
 	background: color-mix(in srgb, var(--jtpp-accent) 78%, transparent);
+}
+
+// Decorative peak silhouette (populated by JS only from already-cached peaks).
+// Two identical, vertically-centered SVG layers: a muted base spanning the full
+// timeline and an accent copy clipped to the played portion. Hidden until the
+// timeline is flagged `has-peaks`, at which point they replace the gradient.
+.jtpp-timeline-peaks,
+.jtpp-timeline-peaks-fill {
+	position: absolute;
+	top: 50%;
+	right: 0;
+	left: 0;
+	display: none;
+	height: 28px;
+	transform: translateY(-50%);
+	pointer-events: none;
+}
+
+.jtpp-timeline-peaks {
+	color: color-mix(in srgb, currentcolor 24%, transparent);
+}
+
+.jtpp-timeline-peaks-fill {
+	color: var(--jtpp-accent);
+	// Reveal only the played portion; the SVG itself stays full width so bars
+	// line up exactly with the muted base beneath.
+	clip-path: inset(0 calc((1 - var(--jtpp-progress)) * 100%) 0 0);
+}
+
+.jtpp-timeline-peaks svg,
+.jtpp-timeline-peaks-fill svg {
+	display: block;
+	width: 100%;
+	height: 100%;
+}
+
+.jtpp-timeline-peaks rect,
+.jtpp-timeline-peaks-fill rect {
+	fill: currentcolor;
+}
+
+.jtpp-timeline.has-peaks .jtpp-timeline-peaks,
+.jtpp-timeline.has-peaks .jtpp-timeline-peaks-fill {
+	display: block;
+}
+
+.jtpp-timeline.has-peaks .jtpp-timeline-gradient,
+.jtpp-timeline.has-peaks .jtpp-timeline-progress {
+	display: none;
+}
+
+// Progress shimmer: a subtle sheen drifting across the played portion while
+// playing only. Applies to the gradient progress bar and the peak fill alike.
+// Disabled for reduced-motion users in the media query below.
+.jtpp.is-playing .jtpp-timeline-progress::after,
+.jtpp.is-playing .jtpp-timeline.has-peaks .jtpp-timeline-peaks-fill::after {
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(90deg, transparent, color-mix(in srgb, #fff 42%, transparent), transparent);
+	background-size: 220% 100%;
+	content: "";
+	pointer-events: none;
+	animation: jtpp-progress-shimmer 2.4s linear infinite;
+}
+
+@keyframes jtpp-progress-shimmer {
+
+	from {
+		background-position: 120% 0;
+	}
+
+	to {
+		background-position: -120% 0;
+	}
 }
 
 .jtpp-timeline-playhead {
@@ -482,6 +647,18 @@
 
 	.jtpp-timeline-gradient {
 		animation: none;
+	}
+
+	.jtpp.is-playing .jtpp-artwork,
+	.jtpp.is-playing .jtpp-timeline-progress::after,
+	.jtpp.is-playing .jtpp-timeline.has-peaks .jtpp-timeline-peaks-fill::after {
+		animation: none;
+	}
+
+	// The shimmer pseudo carries no meaning; hide it entirely at rest.
+	.jtpp.is-playing .jtpp-timeline-progress::after,
+	.jtpp.is-playing .jtpp-timeline.has-peaks .jtpp-timeline-peaks-fill::after {
+		content: none;
 	}
 }
 

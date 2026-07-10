@@ -323,11 +323,13 @@ function render_player( array $tracks, array $options ): string {
 	</ol>
 	<?php endif; ?>
 	<div class="jtpp-panel">
+		<div class="jtpp-artwork-glow" aria-hidden="true"></div>
 		<div class="jtpp-now-playing">
 			<img class="jtpp-artwork" alt="" hidden />
 			<div class="jtpp-now-copy">
 				<div class="jtpp-now-title"></div>
 				<div class="jtpp-now-meta"></div>
+				<div class="jtpp-now-context" hidden></div>
 			</div>
 		</div>
 		<div class="jtpp-loop-mode-bar">
@@ -337,6 +339,8 @@ function render_player( array $tracks, array $options ): string {
 		</div>
 		<div class="jtpp-timeline" role="slider" tabindex="0" aria-label="<?php esc_attr_e( 'Playback position', 'jt-practice-player' ); ?>" aria-valuemin="0" aria-valuenow="0">
 			<div class="jtpp-timeline-gradient"></div>
+			<div class="jtpp-timeline-peaks" aria-hidden="true"></div>
+			<div class="jtpp-timeline-peaks-fill" aria-hidden="true"></div>
 			<div class="jtpp-timeline-progress"></div>
 			<div class="jtpp-timeline-playhead"></div>
 		</div>

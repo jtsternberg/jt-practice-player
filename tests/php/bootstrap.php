@@ -45,6 +45,7 @@ function wp_get_attachment_image_src() { return false; }
 function get_the_title( $id ) { return 'Post ' . $id; }
 function wp_enqueue_script() {}
 function wp_enqueue_style() {}
+function get_site_icon_url( $size = 512 ) { return 'https://example.test/icon.png'; }
 if ( ! class_exists( 'WP_Error' ) ) {
 	class WP_Error {
 		public $code;

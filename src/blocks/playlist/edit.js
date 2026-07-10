@@ -23,6 +23,7 @@ import {
 	Button,
 	Flex,
 	Notice,
+	TextControl,
 } from '@wordpress/components';
 import { dragHandle } from '@wordpress/icons';
 import DebouncedText from '../../components/debounced-text';
@@ -562,6 +563,7 @@ export default function Edit( { attributes, setAttributes, clientId } ) {
 		showSkipButtons,
 		showSpeedControl,
 		showFullscreenControl,
+		playlistTitle,
 		accentColor,
 		loopColor,
 		playheadColor,
@@ -760,6 +762,17 @@ export default function Edit( { attributes, setAttributes, clientId } ) {
 					title={ __( 'Player options', 'jt-practice-player' ) }
 					initialOpen
 				>
+					<TextControl
+						label={ __( 'Playlist title', 'jt-practice-player' ) }
+						help={ __(
+							'Shown in CarPlay, the lock screen, and other system media controls.',
+							'jt-practice-player'
+						) }
+						value={ playlistTitle }
+						onChange={ ( value ) =>
+							setAttributes( { playlistTitle: value } )
+						}
+					/>
 					<ToggleControl
 						label={ __(
 							'Show +/-15s skip buttons',

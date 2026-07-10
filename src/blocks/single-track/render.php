@@ -19,10 +19,12 @@ $jtpp_tracks = resolve_tracks(
 $jtpp_inner  = render_player(
 	$jtpp_tracks,
 	array(
-		'playlist'   => false,
-		'skip'       => ! empty( $attributes['showSkipButtons'] ),
-		'speed'      => ! empty( $attributes['showSpeedControl'] ),
-		'fullscreen' => $attributes['showFullscreenControl'] ?? true,
+		'playlist'      => false,
+		'skip'          => ! empty( $attributes['showSkipButtons'] ),
+		'speed'         => ! empty( $attributes['showSpeedControl'] ),
+		'fullscreen'    => $attributes['showFullscreenControl'] ?? true,
+		'playlistTitle' => '',
+		'siteIcon'     => esc_url_raw( get_site_icon_url( 512 ) ?: '' ),
 	)
 );
 

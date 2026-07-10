@@ -24,6 +24,10 @@
       "type": "boolean",
       "default": true
     },
+    "playlistTitle": {
+      "type": "string",
+      "default": ""
+    },
     "accentColor": {
       "type": "string",
       "default": ""

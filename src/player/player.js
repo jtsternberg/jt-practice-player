@@ -3,7 +3,6 @@ import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js';
 import { createAudioTransport } from './audio-transport';
 import { createMediaSessionAdapter } from './media-session';
 import { timeFromPointer, waveformEligible, isAbortError } from './timeline';
-import { downsamplePeaks, peakBarRects } from './waveform-silhouette';
 import {
 	buttonTargetHandlesKey,
 	targetAcceptsText,
@@ -53,7 +52,6 @@ const SAVED_LOOP_LIMIT = 20;
 const PEAK_CHANNELS = 2;
 const PEAK_SAMPLES = 8000;
 const PEAK_CACHE_LIMIT = 12;
-const TIMELINE_PEAK_BARS = 64;
 const WAVEFORM_LOADING_DISMISS_DELAY = 1000;
 const PEAK_CACHE = new Map();
 const PEAK_PROMISES = new Map();
@@ -260,15 +258,7 @@ export class PracticePlayer {
 		this.nowPlayingEl = this.rootEl.querySelector( '.jtpp-now-playing' );
 		this.nowTitleEl = this.rootEl.querySelector( '.jtpp-now-title' );
 		this.nowMetaEl = this.rootEl.querySelector( '.jtpp-now-meta' );
-		this.nowContextEl = this.rootEl.querySelector( '.jtpp-now-context' );
 		this.artworkEl = this.rootEl.querySelector( '.jtpp-artwork' );
-		this.artworkGlowEl = this.rootEl.querySelector( '.jtpp-artwork-glow' );
-		this.timelinePeaksEl = this.rootEl.querySelector(
-			'.jtpp-timeline-peaks'
-		);
-		this.timelinePeaksFillEl = this.rootEl.querySelector(
-			'.jtpp-timeline-peaks-fill'
-		);
 		this.currentTimeEl = this.rootEl.querySelector( '.jtpp-time-current' );
 		this.totalTimeEl = this.rootEl.querySelector( '.jtpp-time-total' );
 		this.playButton = this.rootEl.querySelector( '.jtpp-play' );
@@ -1110,7 +1100,6 @@ export class PracticePlayer {
 			}
 		} );
 		this.playButton?.classList.add( 'is-playing' );
-		this.rootEl.classList.add( 'is-playing' );
 		this.playButton?.setAttribute( 'aria-label', 'Pause' );
 		if ( this.playButton ) {
 			this.playButton.innerHTML = PAUSE_ICON;
@@ -1121,7 +1110,6 @@ export class PracticePlayer {
 	onPause() {
 		this.flushState();
 		this.playButton?.classList.remove( 'is-playing' );
-		this.rootEl.classList.remove( 'is-playing' );
 		this.playButton?.setAttribute( 'aria-label', 'Play' );
 		if ( this.playButton ) {
 			this.playButton.innerHTML = PLAY_ICON;
@@ -1832,9 +1820,6 @@ export class PracticePlayer {
 				this.artworkEl.hidden = true;
 			}
 		}
-		this.updateArtworkGlow( track );
-		this.updateNowContext();
-		this.renderTimelinePeaks();
 		this.trackButtons.forEach( ( button, index ) => {
 			const active = index === this.activeIndex;
 			button.classList.toggle( 'is-active', active );
@@ -1846,61 +1831,6 @@ export class PracticePlayer {
 			}
 		} );
 		this.syncMediaSession();
-	}
-
-	// Ambient artwork glow: a blurred, dimmed, scaled copy of the current
-	// track's artwork sits behind the panel (Apple Music style). Falls back to
-	// the flat card when the track has no artwork.
-	updateArtworkGlow( track ) {
-		if ( ! this.artworkGlowEl || ! this.panelEl ) {
-			return;
-		}
-		if ( track?.artwork ) {
-			const safeUrl = String( track.artwork ).replace( /["\\]/g, '\\$&' );
-			this.artworkGlowEl.style.backgroundImage = `url("${ safeUrl }")`;
-			this.panelEl.classList.add( 'has-artwork-glow' );
-		} else {
-			this.artworkGlowEl.style.backgroundImage = '';
-			this.panelEl.classList.remove( 'has-artwork-glow' );
-		}
-	}
-
-	// Secondary now-playing line: the playlist's title, when this is a playlist.
-	// The artist/album line is handled separately by `.jtpp-now-meta`.
-	updateNowContext() {
-		if ( ! this.nowContextEl ) {
-			return;
-		}
-		const context =
-			this.options.playlist && this.options.playlistTitle
-				? this.options.playlistTitle
-				: '';
-		this.nowContextEl.textContent = context;
-		this.nowContextEl.hidden = ! context;
-	}
-
-	// Decorative peak silhouette behind the timeline progress fill, built ONLY
-	// from peaks already cached by a loop-edit session. Never fetches or decodes;
-	// when no cached peaks exist the timeline keeps its gradient look.
-	renderTimelinePeaks() {
-		if ( ! this.timelinePeaksEl || ! this.timelinePeaksFillEl ) {
-			return;
-		}
-		const track = this.currentTrack();
-		const cached = track ? PEAK_CACHE.get( track.url ) : null;
-		const heights = cached
-			? downsamplePeaks( cached.data, TIMELINE_PEAK_BARS )
-			: [];
-		if ( ! heights.length ) {
-			this.timelinePeaksEl.innerHTML = '';
-			this.timelinePeaksFillEl.innerHTML = '';
-			this.timelineEl?.classList.remove( 'has-peaks' );
-			return;
-		}
-		const svg = buildPeakSvg( heights );
-		this.timelinePeaksEl.innerHTML = svg;
-		this.timelinePeaksFillEl.innerHTML = svg;
-		this.timelineEl?.classList.add( 'has-peaks' );
 	}
 
 	updateTimes() {
@@ -2116,9 +2046,6 @@ export class PracticePlayer {
 			duration: peaks.duration,
 		} );
 		this.setWaveformLoading( false );
-		// Peaks are now cached, so the compact timeline can upgrade to the peak
-		// silhouette on the spot.
-		this.renderTimelinePeaks();
 		if ( this.loop ) {
 			this.focusLoopZoom();
 		}
@@ -2165,24 +2092,6 @@ export class PracticePlayer {
 			this.waveformEl.dataset.status = '';
 		}
 	}
-}
-
-// Render the decorative peak silhouette as a scalable SVG. The viewBox is a
-// unit 0..100 box stretched to the timeline via preserveAspectRatio="none";
-// bars are centered vertically and fill via CSS `currentColor` so the muted and
-// progress-filled copies can be recolored independently.
-function buildPeakSvg( heights ) {
-	const body = peakBarRects( heights )
-		.map( ( rect ) => {
-			const x = ( rect.x * 100 ).toFixed( 3 );
-			const width = ( rect.width * 100 ).toFixed( 3 );
-			const height = ( rect.height * 100 ).toFixed( 3 );
-			const y = ( ( 1 - rect.height ) * 50 ).toFixed( 3 );
-			const rx = Math.min( rect.width * 50, 1.4 ).toFixed( 3 );
-			return `<rect x="${ x }" y="${ y }" width="${ width }" height="${ height }" rx="${ rx }"></rect>`;
-		} )
-		.join( '' );
-	return `<svg viewBox="0 0 100 100" preserveAspectRatio="none" focusable="false" aria-hidden="true">${ body }</svg>`;
 }
 
 async function getTrackPeaks( url, signal ) {

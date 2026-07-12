@@ -16,6 +16,7 @@ import {
 	SPEED_STEPS,
 	formatTime,
 } from './loop-engine';
+import { shouldStickPlayer } from './sticky';
 import {
 	loadTrackState,
 	saveTrackState,
@@ -635,10 +636,14 @@ export class PracticePlayer {
 		const bottomGap = 10;
 		const panelHeight = this.panelEl.offsetHeight;
 		const viewportHeight = window.innerHeight;
-		const shouldStick =
-			this.trackRows.length > 4 &&
-			shellRect.top < viewportHeight - panelHeight - bottomGap &&
-			listRect.bottom > viewportHeight - bottomGap;
+		const shouldStick = shouldStickPlayer( {
+			trackCount: this.trackRows.length,
+			shellTop: shellRect.top,
+			panelTop: listRect.bottom,
+			panelHeight,
+			viewportHeight,
+			bottomGap,
+		} );
 
 		this.shellEl.style.setProperty(
 			'--jtpp-sticky-left',

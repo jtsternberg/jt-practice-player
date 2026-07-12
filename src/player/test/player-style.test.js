@@ -2,6 +2,17 @@ import fs from 'fs';
 import path from 'path';
 
 describe( 'mobile player panel spacing', () => {
+	it( 'keeps horizontal padding on the in-flow playlist panel', () => {
+		const scss = fs.readFileSync(
+			path.resolve( __dirname, '../player.scss' ),
+			'utf8'
+		);
+
+		expect( scss ).toMatch(
+			/\.jtpp-shell \.jtpp-panel\s*\{[\s\S]*?padding:\s*16px 14px 14px;/
+		);
+	} );
+
 	it( 'overrides the playlist panel selector with horizontal padding on phones', () => {
 		const scss = fs.readFileSync(
 			path.resolve( __dirname, '../player.scss' ),

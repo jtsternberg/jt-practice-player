@@ -54,3 +54,7 @@ export function shouldEnableTrackSave( original, current ) {
 	}
 	return Boolean( current?.url );
 }
+
+export function shouldSyncDraftWithBlockTrack( track ) {
+	return ! track?.trackId;
+}

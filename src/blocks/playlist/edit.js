@@ -30,6 +30,7 @@ import DebouncedText from '../../components/debounced-text';
 import {
 	canonicalFieldsFromTrack,
 	hasCanonicalChanges,
+	shouldSyncDraftWithBlockTrack,
 	shouldEnableTrackSave,
 } from './track-registry';
 
@@ -230,8 +231,11 @@ function TrackSettings( {
 	const [ error, setError ] = useState( '' );
 
 	useEffect( () => {
+		if ( ! shouldSyncDraftWithBlockTrack( track ) ) {
+			return;
+		}
 		setDraft( track );
-		setOriginal( track.trackId ? { ...track } : null );
+		setOriginal( null );
 		setSuggestions( [] );
 		setError( '' );
 	}, [ track, track.trackId ] );

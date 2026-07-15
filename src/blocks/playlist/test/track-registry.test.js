@@ -1,5 +1,6 @@
 import {
 	canonicalFieldsFromTrack,
+	shouldSyncDraftWithBlockTrack,
 	hasCanonicalChanges,
 	shouldEnableTrackSave,
 } from '../track-registry';
@@ -78,6 +79,15 @@ describe( 'track registry editor helpers', () => {
 				url: 'https://media.example.test/retransposed.mp3',
 			} )
 		).toBe( true );
+	} );
+
+	it( 'does not sync a sparse shared-track block reference over the saved draft', () => {
+		expect(
+			shouldSyncDraftWithBlockTrack( {
+				trackId: 259,
+				customTitle: '',
+			} )
+		).toBe( false );
 	} );
 
 	it( 'enables save for dirty existing tracks and sufficiently filled pending tracks', () => {

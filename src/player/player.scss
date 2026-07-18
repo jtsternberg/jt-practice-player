@@ -335,7 +335,7 @@
 .jtpp-panel {
 	position: relative;
 	display: grid;
-	gap: 13px;
+	gap: 9px;
 	padding: 14px;
 	border: 1px solid var(--jtpp-hairline);
 	border-radius: 8px;
@@ -447,9 +447,9 @@
 }
 
 .jtpp-artwork {
-	width: 84px;
-	height: 84px;
-	flex: 0 0 84px;
+	width: 62px;
+	height: 62px;
+	flex: 0 0 62px;
 	border-radius: 10px;
 	object-fit: cover;
 	// Soft drop shadow lifts the artwork off the ambient wash; a 1px hairline
@@ -536,7 +536,7 @@
 	--jtpp-progress: 0;
 
 	position: relative;
-	height: 40px;
+	height: 30px;
 	cursor: pointer;
 	touch-action: none;
 }

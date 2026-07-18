@@ -37,6 +37,35 @@ let activePlayer = null;
 let keyboardBound = false;
 let mediaSessionBound = false;
 let mediaSessionAdapter = null;
+
+// Body scroll lock for the fullscreen overlay-modal fallback. Ref-counted so
+// nested/concurrent players restore the page's original overflow correctly.
+let scrollLockCount = 0;
+let scrollLockPrev = null;
+
+function lockBodyScroll() {
+	if ( scrollLockCount === 0 ) {
+		scrollLockPrev = {
+			html: document.documentElement.style.overflow,
+			body: document.body.style.overflow,
+		};
+		document.documentElement.style.overflow = 'hidden';
+		document.body.style.overflow = 'hidden';
+	}
+	scrollLockCount += 1;
+}
+
+function unlockBodyScroll() {
+	if ( scrollLockCount === 0 ) {
+		return;
+	}
+	scrollLockCount -= 1;
+	if ( scrollLockCount === 0 && scrollLockPrev ) {
+		document.documentElement.style.overflow = scrollLockPrev.html;
+		document.body.style.overflow = scrollLockPrev.body;
+		scrollLockPrev = null;
+	}
+}
 const SAVE_DELAY = 1000;
 const REGION_COLOR = 'rgba(214, 137, 42, 0.24)';
 const WAVE_COLOR = '#9aa1aa';
@@ -56,6 +85,47 @@ const PEAK_CACHE_LIMIT = 12;
 const WAVEFORM_LOADING_DISMISS_DELAY = 1000;
 const PEAK_CACHE = new Map();
 const PEAK_PROMISES = new Map();
+
+// Shareable deep-link support. A URL like
+//   ?jtpp-track=<id|index>&jtpp-loop=<startSec>-<endSec>&jtpp-rate=<n>&jtpp-fs=1
+// boots the player into fullscreen on that track, applies the loop as an
+// active (unsaved) loop reconstructed entirely from the URL, and starts (or
+// arms) playback — so a section can be co-practiced from a shared link.
+// Consumed once per page load, by the first player that owns the track.
+let shareParamsConsumed = false;
+const SHARE_PARAM_TRACK = 'jtpp-track';
+const SHARE_PARAM_LOOP = 'jtpp-loop';
+const SHARE_PARAM_RATE = 'jtpp-rate';
+const SHARE_PARAM_FS = 'jtpp-fs';
+
+function roundShareTime( seconds ) {
+	return Math.round( seconds * 100 ) / 100;
+}
+
+function parseShareLoop( value ) {
+	if ( ! value ) {
+		return null;
+	}
+	const match = /^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/.exec( value.trim() );
+	if ( ! match ) {
+		return null;
+	}
+	const start = parseFloat( match[ 1 ] );
+	const end = parseFloat( match[ 2 ] );
+	if (
+		! Number.isFinite( start ) ||
+		! Number.isFinite( end ) ||
+		end <= start
+	) {
+		return null;
+	}
+	return { start, end };
+}
+
+function parseShareRate( value ) {
+	const rate = Number( value );
+	return Number.isFinite( rate ) && rate > 0.1 && rate <= 4 ? rate : null;
+}
 const PLAY_ICON =
 	'<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="7 5 19 12 7 19 7 5"></polygon></svg>';
 const PAUSE_ICON =
@@ -184,6 +254,7 @@ export class PracticePlayer {
 		PLAYERS.add( this );
 		activePlayer = activePlayer || this;
 		bindGlobalKeyboard();
+		this.applyShareParams();
 
 		document.addEventListener(
 			'visibilitychange',
@@ -1234,18 +1305,241 @@ export class PracticePlayer {
 	}
 
 	toggleFullscreen() {
-		if ( ! this.fullscreenButton || ! document.fullscreenEnabled ) {
+		if ( ! this.fullscreenButton ) {
 			return;
 		}
+		// Already in the CSS overlay fallback → exit it.
+		if ( this.fullscreenModal ) {
+			this.exitFullscreenModal();
+			return;
+		}
+		// Already in native fullscreen → exit it.
 		if ( document.fullscreenElement === this.rootEl ) {
 			document.exitFullscreen?.();
 			return;
 		}
-		this.rootEl.requestFullscreen?.();
+		// Try native fullscreen first (desktop). Fall back to the overlay modal
+		// when the API is unavailable (iOS Safari only fullscreens <video>) or
+		// when the request rejects.
+		const request = this.rootEl.requestFullscreen;
+		if ( document.fullscreenEnabled && typeof request === 'function' ) {
+			let result;
+			try {
+				result = request.call( this.rootEl );
+			} catch ( err ) {
+				this.enterFullscreenModal();
+				return;
+			}
+			if ( result && typeof result.catch === 'function' ) {
+				result.catch( () => this.enterFullscreenModal() );
+			}
+			return;
+		}
+		this.enterFullscreenModal();
+	}
+
+	// Class-driven fullscreen fallback: a fixed overlay that covers all site
+	// chrome, used where the native Fullscreen API can't fullscreen this
+	// element. Shares the .is-fullscreen styling with the native path.
+	enterFullscreenModal() {
+		if ( this.fullscreenModal ) {
+			return;
+		}
+		this.fullscreenModal = true;
+		const active = this.rootEl.ownerDocument.activeElement;
+		this.fullscreenReturnFocus =
+			active && typeof active.focus === 'function'
+				? active
+				: this.fullscreenButton;
+		this.rootEl.classList.add( 'is-fullscreen-modal' );
+		this.rootEl.setAttribute( 'role', 'dialog' );
+		this.rootEl.setAttribute( 'aria-modal', 'true' );
+		this.rootEl.setAttribute(
+			'aria-label',
+			'Practice player, full screen'
+		);
+		lockBodyScroll();
+		this.reflectFullscreen();
+		// Move focus into the modal so keyboard shortcuts (incl. Escape) and
+		// screen readers land inside it. Full focus-trap cycling is deferred to
+		// the a11y task (jt-practice-player-a9y.6).
+		( this.fullscreenButton || this.rootEl ).focus?.();
+	}
+
+	exitFullscreenModal() {
+		if ( ! this.fullscreenModal ) {
+			return;
+		}
+		this.fullscreenModal = false;
+		this.rootEl.classList.remove( 'is-fullscreen-modal' );
+		this.rootEl.removeAttribute( 'role' );
+		this.rootEl.removeAttribute( 'aria-modal' );
+		this.rootEl.removeAttribute( 'aria-label' );
+		unlockBodyScroll();
+		this.reflectFullscreen();
+		this.fullscreenReturnFocus?.focus?.();
+		this.fullscreenReturnFocus = null;
+	}
+
+	// Build a shareable deep link that reconstructs the current view: track,
+	// active loop (start/end), playback rate, and a fullscreen flag. Callable
+	// directly (e.g. from the console or a future Share menu, task a9y.9).
+	getShareUrl() {
+		const url = new URL( window.location.href );
+		url.search = '';
+		url.hash = '';
+		const params = url.searchParams;
+		const track = this.currentTrack();
+		if ( track ) {
+			params.set( SHARE_PARAM_TRACK, String( track.id ) );
+		}
+		if ( this.loop && this.loop.on && this.loop.start < this.loop.end ) {
+			params.set(
+				SHARE_PARAM_LOOP,
+				`${ roundShareTime( this.loop.start ) }-${ roundShareTime(
+					this.loop.end
+				) }`
+			);
+		}
+		const rate = Number( this.speedSelect?.value ) || 1;
+		if ( rate !== 1 ) {
+			params.set( SHARE_PARAM_RATE, String( rate ) );
+		}
+		params.set( SHARE_PARAM_FS, '1' );
+		return url.toString();
+	}
+
+	// Decode share params from the current URL and boot into the shared view.
+	// Runs once per page load, claimed by the first player that owns the
+	// referenced track. The URL loop overrides any saved state for that track.
+	applyShareParams() {
+		if ( shareParamsConsumed ) {
+			return;
+		}
+		const params = new URLSearchParams( window.location.search );
+		const trackParam = params.get( SHARE_PARAM_TRACK );
+		const loopParam = params.get( SHARE_PARAM_LOOP );
+		if ( trackParam === null && loopParam === null ) {
+			return;
+		}
+
+		let index = -1;
+		if ( trackParam !== null ) {
+			index = this.tracks.findIndex(
+				( track ) => String( track.id ) === trackParam
+			);
+			// Fall back to a numeric index when the id isn't found (e.g. a link
+			// shared before ids were stable, or a hand-built URL).
+			if ( index < 0 && /^\d+$/.test( trackParam ) ) {
+				const numeric = Number( trackParam );
+				if ( numeric >= 0 && numeric < this.tracks.length ) {
+					index = numeric;
+				}
+			}
+			// Track isn't in this player's list — let another player claim it.
+			if ( index < 0 ) {
+				return;
+			}
+		} else {
+			// Loop-only link applies to the current track.
+			index = this.activeIndex;
+		}
+
+		shareParamsConsumed = true;
+
+		const loop = parseShareLoop( loopParam );
+		const rate = parseShareRate( params.get( SHARE_PARAM_RATE ) );
+		const wantFullscreen = params.get( SHARE_PARAM_FS ) !== '0';
+
+		if ( index !== this.activeIndex ) {
+			this.loadTrack( index, false );
+		}
+
+		// The shared view is authoritative: suppress the per-track saved-state
+		// restore (which would otherwise seek to 0 / reset rate, or apply a
+		// locally saved loop) so the URL-derived state always wins. This is set
+		// synchronously — before the audio's loadedmetadata restore can fire.
+		this.trackStateRestored = true;
+
+		// Apply loop + rate + fullscreen immediately. Mobile browsers routinely
+		// refuse to preload metadata until a gesture, so gating this on
+		// loadedmetadata would strand the whole boot on exactly the devices we
+		// care about. Only the seek genuinely needs a known duration, so it is
+		// the one thing deferred (see seekWhenReady).
+		if ( loop ) {
+			this.loop = { start: loop.start, end: loop.end, on: true };
+			this.hydrateLoopRegion();
+			this.seekWhenReady( loop.start );
+			this.focusLoopZoom();
+		}
+		if ( rate ) {
+			this.applyRate( rate );
+		}
+		this.reflectLoopTools();
+		this.updateTimes();
+		this.requestStickyUpdate();
+		if ( wantFullscreen ) {
+			this.enterFullscreenModal();
+		}
+		this.armSharedPlayback();
+	}
+
+	// Seek to a target time as soon as the media duration is known. Setting
+	// currentTime before metadata is unreliable, so defer to loadedmetadata
+	// when the element hasn't loaded yet (e.g. before the first gesture-driven
+	// play on mobile). The active loop keeps playback in range thereafter.
+	seekWhenReady( time ) {
+		const audio = this.nativeAudio;
+		const doSeek = () => {
+			if ( this.nativeAudio !== audio || ! this.transport ) {
+				return;
+			}
+			const { duration } = this.transport.snapshot();
+			this.transport.seekTo(
+				duration ? clampSeek( time, duration ) : time
+			);
+			this.updateTimes();
+		};
+		if ( audio && audio.readyState >= 1 ) {
+			doSeek();
+		} else {
+			audio?.addEventListener( 'loadedmetadata', doSeek, { once: true } );
+		}
+	}
+
+	// Autoplay of audible media is blocked without a user gesture. Try to
+	// play; if the browser refuses, surface a clear "tap to start" affordance
+	// (CSS class + fullscreen hint) and start on the first interaction rather
+	// than failing silently.
+	armSharedPlayback() {
+		const result = this.transport?.play();
+		if ( result && typeof result.then === 'function' ) {
+			result.catch( () => this.awaitGestureToPlay() );
+		} else {
+			this.awaitGestureToPlay();
+		}
+	}
+
+	awaitGestureToPlay() {
+		if ( this.pendingGesturePlay ) {
+			return;
+		}
+		this.pendingGesturePlay = true;
+		this.rootEl.classList.add( 'is-awaiting-gesture' );
+		const start = () => {
+			document.removeEventListener( 'pointerdown', start, true );
+			document.removeEventListener( 'keydown', start, true );
+			this.pendingGesturePlay = false;
+			this.rootEl.classList.remove( 'is-awaiting-gesture' );
+			this.play();
+		};
+		document.addEventListener( 'pointerdown', start, true );
+		document.addEventListener( 'keydown', start, true );
 	}
 
 	reflectFullscreen() {
-		const active = document.fullscreenElement === this.rootEl;
+		const active =
+			document.fullscreenElement === this.rootEl || this.fullscreenModal;
 		this.rootEl.classList.toggle( 'is-fullscreen', active );
 		this.fullscreenButton?.setAttribute(
 			'aria-pressed',
@@ -1922,9 +2216,13 @@ export class PracticePlayer {
 			MediaTrackNext: () => this.advance( 1, true ),
 		};
 		// Escape exits loop edit mode only while it is active, so it stays out
-		// of the way of native Escape behavior (e.g. exiting fullscreen).
+		// of the way of native Escape behavior (e.g. exiting fullscreen). When
+		// not editing a loop, Escape closes the overlay-modal fallback (native
+		// fullscreen handles its own Escape via the browser).
 		if ( this.loopEditing ) {
 			handlers.Escape = () => this.exitLoopEditMode();
+		} else if ( this.fullscreenModal ) {
+			handlers.Escape = () => this.exitFullscreenModal();
 		}
 		const handler = handlers[ event.key ];
 		if ( handler ) {

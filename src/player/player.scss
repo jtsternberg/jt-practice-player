@@ -48,6 +48,44 @@
 	color: CanvasText;
 }
 
+// Fullscreen fallback for platforms where the native Fullscreen API can't
+// fullscreen this element (notably iOS Safari, which only fullscreens
+// <video>). JS adds .is-fullscreen-modal (alongside .is-fullscreen) and locks
+// body scroll; this fixed overlay covers all site chrome. It shares the
+// .is-fullscreen layout rules with the native path.
+.jtpp.is-fullscreen-modal {
+	position: fixed;
+	inset: 0;
+	z-index: 2147483000;
+	overflow: auto;
+	-webkit-overflow-scrolling: touch;
+	// Keep content clear of the notch and home indicator on iPhone.
+	padding:
+		max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+		max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+	background: Canvas;
+	color: CanvasText;
+	animation: jtpp-fs-in 200ms ease;
+}
+
+@keyframes jtpp-fs-in {
+
+	from {
+		opacity: 0;
+	}
+
+	to {
+		opacity: 1;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+	.jtpp.is-fullscreen-modal {
+		animation: none;
+	}
+}
+
 .jtpp-shell {
 	position: relative;
 	display: grid;
@@ -1538,5 +1576,42 @@
 	.jtpp-loop-cue-delete {
 		justify-content: center;
 		text-align: center;
+	}
+}
+
+// Shared deep-link autoplay fallback (task a9y.10): when the browser blocks
+// autoplay on a shared link, we can't play until the visitor interacts. Draw
+// attention to the play control with a gentle pulse and, in fullscreen, a
+// "Tap to start" hint, so playback armed-but-waiting never looks broken.
+.jtpp.is-awaiting-gesture .jtpp-play {
+	animation: jtpp-awaiting-pulse 1.4s ease-in-out infinite;
+}
+
+.jtpp.is-awaiting-gesture.is-fullscreen .jtpp-controls::after {
+	display: block;
+	width: 100%;
+	margin-top: 8px;
+	color: var(--jtpp-muted);
+	font-size: 13px;
+	text-align: center;
+	content: "Tap to start";
+}
+
+@keyframes jtpp-awaiting-pulse {
+
+	0%,
+	100% {
+		box-shadow: 0 0 0 0 color-mix(in srgb, var(--jtpp-accent) 55%, transparent);
+	}
+
+	50% {
+		box-shadow: 0 0 0 8px color-mix(in srgb, var(--jtpp-accent) 0%, transparent);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+	.jtpp.is-awaiting-gesture .jtpp-play {
+		animation: none;
 	}
 }

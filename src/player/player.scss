@@ -442,8 +442,10 @@
 	position: relative;
 	// Lift the whole now-playing row (which hosts the overflow menu) above the
 	// later panel siblings — esp. .jtpp-controls (z-index:1) — so the open …
-	// menu, which overflows downward, paints over the transport row.
-	z-index: 2;
+	// menu, which overflows downward, paints over the transport row. !important
+	// defeats a higher-specificity stacking rule that otherwise pins this row
+	// below the controls (verified on the BreakFree theme).
+	z-index: 2 !important;
 	display: flex;
 	align-items: center;
 	gap: 13px;

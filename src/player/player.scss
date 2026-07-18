@@ -1925,6 +1925,33 @@
 	min-height: 96px;
 }
 
+// Wide screens (desktop / tablet landscape): the full-height flex column
+// looks sparse — a skinny stretched column with big vertical gaps and black
+// side voids. Instead center the now-playing content as a cohesive card and
+// stop the artwork region from ballooning. Mobile keeps the fit-to-viewport
+// flex behavior below this breakpoint (a9y.13).
+@media (min-width: 700px) {
+
+	.jtpp.is-fullscreen .jtpp-shell {
+		justify-content: center;
+		width: min(100%, 560px);
+	}
+
+	.jtpp.is-fullscreen .jtpp-panel {
+		flex: 0 1 auto;
+		justify-content: center;
+		gap: 18px;
+	}
+
+	.jtpp.is-fullscreen .jtpp-now-playing {
+		flex: 0 0 auto;
+	}
+
+	.jtpp.is-fullscreen .jtpp-artwork {
+		max-width: min(340px, 40vh);
+	}
+}
+
 // =========================================================================
 // Now-playing overflow (…) menu (task a9y.9): per-current-track
 // Download / Share / Remove from queue. Sits beside Set loop on the

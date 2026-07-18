@@ -130,6 +130,10 @@ const PLAY_ICON =
 	'<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="7 5 19 12 7 19 7 5"></polygon></svg>';
 const PAUSE_ICON =
 	'<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5v14"></path><path d="M16 5v14"></path></svg>';
+// Trash icon for the saved-cue delete control, drawn to match the stroke
+// style of the transport icons above.
+const TRASH_ICON =
+	'<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>';
 
 function bindGlobalKeyboard() {
 	if ( keyboardBound ) {
@@ -1979,7 +1983,7 @@ export class PracticePlayer {
 				deleteButton.type = 'button';
 				deleteButton.className = 'jtpp-loop-cue-delete';
 				deleteButton.dataset.loopId = loop.id;
-				deleteButton.textContent = 'Delete';
+				deleteButton.innerHTML = TRASH_ICON;
 				deleteButton.setAttribute(
 					'aria-label',
 					`Delete cue ${ loop.name }`

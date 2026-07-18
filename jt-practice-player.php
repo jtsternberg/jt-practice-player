@@ -330,11 +330,11 @@ function render_player( array $tracks, array $options ): string {
 				<div class="jtpp-now-title"></div>
 				<div class="jtpp-now-meta"></div>
 			</div>
-		</div>
-		<div class="jtpp-loop-mode-bar">
-			<p class="jtpp-loop-help" hidden><?php esc_html_e( 'Drag to select a section. Tap to position the playhead.', 'jt-practice-player' ); ?></p>
-			<button type="button" class="jtpp-loop-edit"><?php esc_html_e( 'Set loop', 'jt-practice-player' ); ?></button>
-			<button type="button" class="jtpp-loop-edit-done" hidden><?php esc_html_e( 'Done', 'jt-practice-player' ); ?></button>
+			<div class="jtpp-loop-mode-bar">
+				<p class="jtpp-loop-help" hidden><?php esc_html_e( 'Drag to select a section. Tap to position the playhead.', 'jt-practice-player' ); ?></p>
+				<button type="button" class="jtpp-loop-edit"><?php esc_html_e( 'Set loop', 'jt-practice-player' ); ?></button>
+				<button type="button" class="jtpp-loop-edit-done" hidden><?php esc_html_e( 'Done', 'jt-practice-player' ); ?></button>
+			</div>
 		</div>
 		<div class="jtpp-timeline" role="slider" tabindex="0" aria-label="<?php esc_attr_e( 'Playback position', 'jt-practice-player' ); ?>" aria-valuemin="0" aria-valuenow="0">
 			<div class="jtpp-timeline-gradient"></div>

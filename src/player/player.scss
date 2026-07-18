@@ -2032,3 +2032,86 @@
 .jtpp.is-loop-editing .jtpp-more-wrap {
 	display: none;
 }
+
+// =========================================================================
+// Wide-screen fullscreen (a9y.14): blurred-artwork fill + side playlist.
+// Gated to >=1024px so mobile fullscreen keeps its fit-to-viewport phone
+// layout untouched. On desktop the flat-black void becomes an ambient blur
+// of the current artwork, and the extra width shows the playlist alongside
+// the now-playing.
+// =========================================================================
+@media (min-width: 1024px) {
+
+	// Blurred current-artwork fills the whole overlay behind the content.
+	// --jtpp-artwork-glow is set on the root by updateArtworkGlow().
+	.jtpp.is-fullscreen::before {
+		position: fixed;
+		z-index: 0;
+		inset: 0;
+		background-image: var(--jtpp-artwork-glow, none);
+		background-repeat: no-repeat;
+		background-position: center;
+		background-size: cover;
+		transform: scale(1.15);
+		filter: blur(64px) saturate(1.5);
+		content: "";
+		pointer-events: none;
+	}
+
+	// Scrim over the wash keeps title/list text at AA contrast, light + dark.
+	.jtpp.is-fullscreen::after {
+		position: fixed;
+		z-index: 0;
+		inset: 0;
+		background: color-mix(in srgb, Canvas 64%, transparent);
+		content: "";
+		pointer-events: none;
+	}
+
+	// Content rides above the wash. A deterministic 2-column grid: now-playing
+	// on the left (col 1), playlist on the right (col 2). Grid placement is set
+	// explicitly so DOM order (tracklist first) doesn't matter.
+	.jtpp.is-fullscreen .jtpp-shell {
+		position: relative;
+		z-index: 1;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 360px;
+		align-items: center;
+		gap: 48px;
+		width: min(100%, 1180px);
+		height: 100%;
+		margin: 0 auto;
+	}
+
+	// Now-playing column, centered in its cell and vertically centered within.
+	.jtpp.is-fullscreen .jtpp-panel {
+		grid-column: 1;
+		justify-self: stretch;
+		width: min(100%, 560px);
+		height: 100%;
+		margin-inline: auto;
+		justify-content: center;
+	}
+
+	.jtpp.is-fullscreen .jtpp-artwork {
+		max-width: min(360px, 44vh);
+	}
+
+	// The panel-level card wash is redundant behind the full-overlay fill.
+	.jtpp.is-fullscreen .jtpp-artwork-glow {
+		display: none;
+	}
+
+	// Playlist as a scrollable side column over the wash.
+	.jtpp.is-fullscreen .jtpp-tracklist {
+		display: block;
+		grid-column: 2;
+		align-self: center;
+		max-height: 84vh;
+		padding: 8px;
+		overflow-y: auto;
+		border: 0;
+		border-radius: 12px;
+		background: color-mix(in srgb, Canvas 42%, transparent);
+	}
+}

@@ -2340,9 +2340,17 @@ export class PracticePlayer {
 				'--jtpp-artwork-glow',
 				`url("${ safeUrl }")`
 			);
+			// Also expose the URL on the root so the fullscreen full-bleed
+			// background (a9y.14) can paint it behind the whole overlay, not
+			// just inside the panel.
+			this.rootEl?.style.setProperty(
+				'--jtpp-artwork-glow',
+				`url("${ safeUrl }")`
+			);
 			this.panelEl.classList.add( 'has-artwork-glow' );
 		} else {
 			this.artworkGlowEl.style.removeProperty( '--jtpp-artwork-glow' );
+			this.rootEl?.style.removeProperty( '--jtpp-artwork-glow' );
 			this.panelEl.classList.remove( 'has-artwork-glow' );
 		}
 	}

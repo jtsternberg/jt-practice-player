@@ -342,6 +342,7 @@ export class PracticePlayer {
 		this.repeatButton = this.rootEl.querySelector( '.jtpp-repeat' );
 		this.randomButton = this.rootEl.querySelector( '.jtpp-random' );
 		this.fullscreenButton = this.rootEl.querySelector( '.jtpp-fullscreen' );
+		this.fsCloseButton = this.rootEl.querySelector( '.jtpp-fs-close' );
 		this.loopToolsEl = this.rootEl.querySelector( '.jtpp-loop-tools' );
 		this.loopCurrentEl = this.rootEl.querySelector( '.jtpp-loop-current' );
 		this.loopSavedEl = this.rootEl.querySelector( '.jtpp-loop-saved' );
@@ -378,6 +379,11 @@ export class PracticePlayer {
 			this.toggleRandomMode()
 		);
 		this.fullscreenButton?.addEventListener( 'click', () =>
+			this.toggleFullscreen()
+		);
+		// The in-overlay collapse chevron always exits fullscreen (native or
+		// modal); toggleFullscreen() detects the active mode and reverses it.
+		this.fsCloseButton?.addEventListener( 'click', () =>
 			this.toggleFullscreen()
 		);
 		this.loopClearButton?.addEventListener( 'click', () =>

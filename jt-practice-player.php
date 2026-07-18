@@ -324,6 +324,7 @@ function render_player( array $tracks, array $options ): string {
 	<?php endif; ?>
 	<div class="jtpp-panel">
 		<div class="jtpp-artwork-glow" aria-hidden="true"></div>
+		<button type="button" class="jtpp-fs-close" aria-label="<?php esc_attr_e( 'Exit full screen', 'jt-practice-player' ); ?>"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></button>
 		<div class="jtpp-now-playing">
 			<img class="jtpp-artwork" alt="" hidden />
 			<div class="jtpp-now-copy">

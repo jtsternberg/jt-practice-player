@@ -56,6 +56,9 @@
 .jtpp.is-fullscreen-modal {
 	position: fixed;
 	inset: 0;
+	// Zero any block-wrapper margin — a fixed element still honors margins, so
+	// a theme's top margin would leave a gap where site chrome peeks through.
+	margin: 0;
 	z-index: 2147483000;
 	overflow: auto;
 	-webkit-overflow-scrolling: touch;
@@ -97,15 +100,28 @@
 	box-shadow: 0 1px 0 color-mix(in srgb, currentcolor 5%, transparent);
 }
 
+// Fullscreen = a Spotify-style "now playing" screen: a flex column that fills
+// the overlay so nothing scrolls. The tracklist is hidden; only the artwork
+// region flexes, giving up height when loop-edit tools appear (a9y.5).
 .jtpp:fullscreen .jtpp-shell,
 .jtpp.is-fullscreen .jtpp-shell {
-	width: min(100%, 1100px);
-	min-height: calc(100vh - 48px);
+	display: flex;
+	flex-direction: column;
+	width: min(100%, 720px);
+	height: 100%;
+	min-height: 0;
 	margin: 0 auto;
-	background:
-		linear-gradient(180deg, color-mix(in srgb, currentcolor 3%, transparent), transparent 54px),
-		Canvas;
+	padding: 0;
+	border: 0;
+	background: none;
+	box-shadow: none;
 }
+
+.jtpp:fullscreen .jtpp-shell {
+	height: auto;
+	min-height: 100vh;
+}
+
 
 .jtpp-tracklist {
 	display: grid;
@@ -1781,4 +1797,127 @@
 	.jtpp .jtpp-controls {
 		gap: 5px;
 	}
+}
+
+// === Fullscreen now-playing layout (a9y.5) — placed after base rules to
+// satisfy no-descending-specificity. Shares .is-fullscreen (native + modal).
+.jtpp.is-fullscreen .jtpp-tracklist {
+	display: none;
+}
+
+// The panel becomes the column body and fills remaining height.
+.jtpp.is-fullscreen .jtpp-panel {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 12px;
+	min-height: 0;
+	padding: 0;
+	background: none;
+	border: 0;
+	box-shadow: none;
+}
+
+// Collapse chevron: hidden inline, top-left in fullscreen; the sole exit.
+.jtpp-fs-close {
+	display: none;
+}
+
+.jtpp.is-fullscreen .jtpp-fs-close {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-self: flex-start;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	border: 0;
+	border-radius: 999px;
+	color: inherit;
+	background: transparent;
+	box-shadow: none;
+	cursor: pointer;
+	transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.jtpp.is-fullscreen .jtpp-fs-close:hover,
+.jtpp.is-fullscreen .jtpp-fs-close:focus-visible {
+	color: var(--jtpp-accent);
+	background: var(--jtpp-active);
+	outline: none;
+}
+
+// The in-cluster fullscreen button is redundant once open — chevron exits.
+.jtpp.is-fullscreen .jtpp-fullscreen {
+	display: none;
+}
+
+// Now-playing stacks vertically and is the flexible region: the artwork
+// shrinks (min-height:0) so the whole screen fits without scrolling.
+.jtpp.is-fullscreen .jtpp-now-playing {
+	flex: 1 1 auto;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 16px;
+	min-height: 0;
+	text-align: center;
+}
+
+.jtpp.is-fullscreen .jtpp-artwork {
+	flex: 0 1 auto;
+	width: auto;
+	height: auto;
+	max-width: min(56vw, 60vh, 360px);
+	max-height: 100%;
+	margin: 0 auto;
+	aspect-ratio: 1 / 1;
+}
+
+.jtpp.is-fullscreen .jtpp-now-copy {
+	flex: 0 0 auto;
+}
+
+.jtpp.is-fullscreen .jtpp-now-title {
+	font-size: 1.5rem;
+}
+
+.jtpp.is-fullscreen .jtpp-now-meta {
+	font-size: 1rem;
+}
+
+// Keep Set-loop / help centered under the title (not pinned right) here.
+.jtpp.is-fullscreen .jtpp-now-playing .jtpp-loop-mode-bar {
+	justify-content: center;
+	margin: 0;
+}
+
+// Scrubber, times, waveform, loop tools and controls hold their natural
+// height; the flexing artwork absorbs the difference.
+.jtpp.is-fullscreen .jtpp-timeline,
+.jtpp.is-fullscreen .jtpp-times,
+.jtpp.is-fullscreen .jtpp-waveform,
+.jtpp.is-fullscreen .jtpp-loop-tools,
+.jtpp.is-fullscreen .jtpp-controls {
+	flex: 0 0 auto;
+}
+
+// In fullscreen the now-playing column must NOT adopt the docked loop-edit
+// reflow (flex-wrap:wrap + full-basis bar), which would wrap children into
+// side-by-side columns and shove the help text off-screen. Keep the column.
+.jtpp.is-fullscreen.is-loop-editing .jtpp-now-playing {
+	flex-wrap: nowrap;
+}
+
+.jtpp.is-fullscreen.is-loop-editing .jtpp-now-playing .jtpp-loop-mode-bar {
+	flex: 0 0 auto;
+	flex-basis: auto;
+	margin: 0;
+}
+
+// Give the waveform a workable height in fullscreen loop-edit; the artwork
+// (flex:0 1 auto) yields the space so the screen still fits.
+.jtpp.is-fullscreen .jtpp-waveform:not([hidden]) {
+	min-height: 96px;
 }

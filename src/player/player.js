@@ -1335,31 +1335,12 @@ export class PracticePlayer {
 		if ( ! this.fullscreenButton ) {
 			return;
 		}
-		// Already in the CSS overlay fallback → exit it.
+		// Always use the CSS overlay modal — never native requestFullscreen.
+		// Native fullscreen renders inconsistently across browsers/OSes (and
+		// isn't reproducible in our tooling), so the class-driven overlay is the
+		// single consistent path shared by desktop and mobile. (a9y.15)
 		if ( this.fullscreenModal ) {
 			this.exitFullscreenModal();
-			return;
-		}
-		// Already in native fullscreen → exit it.
-		if ( document.fullscreenElement === this.rootEl ) {
-			document.exitFullscreen?.();
-			return;
-		}
-		// Try native fullscreen first (desktop). Fall back to the overlay modal
-		// when the API is unavailable (iOS Safari only fullscreens <video>) or
-		// when the request rejects.
-		const request = this.rootEl.requestFullscreen;
-		if ( document.fullscreenEnabled && typeof request === 'function' ) {
-			let result;
-			try {
-				result = request.call( this.rootEl );
-			} catch ( err ) {
-				this.enterFullscreenModal();
-				return;
-			}
-			if ( result && typeof result.catch === 'function' ) {
-				result.catch( () => this.enterFullscreenModal() );
-			}
 			return;
 		}
 		this.enterFullscreenModal();

@@ -1808,17 +1808,29 @@
 	display: none;
 }
 
-// The panel becomes the column body and fills remaining height.
+// The panel becomes the column body and fills remaining height. Crucially it
+// must cancel the docked sticky-player's `position:fixed` (from
+// .is-player-stuck, which stays set while scrolled) — otherwise the panel
+// breaks out of the fullscreen layout to full width and hits the playlist.
 .jtpp.is-fullscreen .jtpp-panel {
 	display: flex;
+	position: static;
+	inset: auto;
+	z-index: auto;
 	flex: 1 1 auto;
 	flex-direction: column;
 	gap: 12px;
+	width: auto;
 	min-height: 0;
 	padding: 0;
 	background: none;
 	border: 0;
 	box-shadow: none;
+}
+
+// Cancel the docked sticky-player's peek-gradient bar in fullscreen.
+.jtpp.is-fullscreen .jtpp-panel::before {
+	content: none;
 }
 
 // Collapse chevron: hidden inline, top-left in fullscreen; the sole exit.
@@ -1952,10 +1964,12 @@
 	pointer-events: none;
 }
 
-// Content rides above the wash.
+// Content rides above the wash. Also cancel the stuck-player's bottom padding
+// (reserved for the fixed docked panel, which fullscreen makes static again).
 .jtpp.is-fullscreen .jtpp-shell {
 	position: relative;
 	z-index: 1;
+	padding-bottom: 0;
 }
 
 // The panel-level card wash is redundant behind the full-overlay fill.
@@ -2083,25 +2097,26 @@
 	// Content rides above the wash. A deterministic 2-column grid: now-playing
 	// on the left (col 1), playlist on the right (col 2). Grid placement is set
 	// explicitly so DOM order (tracklist first) doesn't matter.
+	// Two content-sized columns centered together as one unit (justify-content),
+	// so on wide/ultrawide screens they stay adjacent instead of drifting apart
+	// with a dead gap. now-playing = col 1, playlist = col 2.
 	.jtpp.is-fullscreen .jtpp-shell {
 		position: relative;
 		z-index: 1;
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) 360px;
+		grid-template-columns: minmax(0, 560px) minmax(0, 360px);
+		justify-content: center;
 		align-items: center;
-		gap: 48px;
-		width: min(100%, 1180px);
+		gap: 40px;
+		width: min(100%, 1000px);
 		height: 100%;
 		margin: 0 auto;
 	}
 
-	// Now-playing column, centered in its cell and vertically centered within.
 	.jtpp.is-fullscreen .jtpp-panel {
 		grid-column: 1;
-		justify-self: stretch;
-		width: min(100%, 560px);
+		width: 100%;
 		height: 100%;
-		margin-inline: auto;
 		justify-content: center;
 	}
 

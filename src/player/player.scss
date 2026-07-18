@@ -789,7 +789,7 @@
 	text-transform: uppercase;
 }
 
-.jtpp-loop-clear {
+.jtpp .jtpp-loop-clear {
 	display: inline-flex;
 	width: 24px;
 	height: 24px;
@@ -863,11 +863,10 @@
 	margin-inline-start: auto;
 }
 
-.jtpp-loop-save,
-.jtpp-loop-save-confirm,
-.jtpp-loop-save-cancel,
-.jtpp-loop-cue-restore,
-.jtpp-loop-cue-delete {
+.jtpp .jtpp-loop-save,
+.jtpp .jtpp-loop-save-confirm,
+.jtpp .jtpp-loop-save-cancel,
+.jtpp .jtpp-loop-cue-restore {
 	padding: 4px 12px;
 	border: 1px solid color-mix(in srgb, var(--jtpp-loop) 44%, transparent);
 	border-radius: 999px;
@@ -885,38 +884,35 @@
 		color 140ms ease;
 }
 
-.jtpp-loop-save,
-.jtpp-loop-save-confirm,
-.jtpp-loop-cue-restore {
+.jtpp .jtpp-loop-save,
+.jtpp .jtpp-loop-save-confirm,
+.jtpp .jtpp-loop-cue-restore {
 	color: color-mix(in srgb, currentcolor 86%, #000);
 	background: color-mix(in srgb, var(--jtpp-loop) 13%, transparent);
 }
 
-.jtpp-loop-clear:hover,
-.jtpp-loop-clear:focus-visible,
-.jtpp-loop-save:hover,
-.jtpp-loop-save:focus-visible,
-.jtpp-loop-save-confirm:hover,
-.jtpp-loop-save-confirm:focus-visible,
-.jtpp-loop-cue-restore:hover,
-.jtpp-loop-cue-restore:focus-visible {
+.jtpp .jtpp-loop-clear:hover,
+.jtpp .jtpp-loop-clear:focus-visible,
+.jtpp .jtpp-loop-save:hover,
+.jtpp .jtpp-loop-save:focus-visible,
+.jtpp .jtpp-loop-save-confirm:hover,
+.jtpp .jtpp-loop-save-confirm:focus-visible,
+.jtpp .jtpp-loop-cue-restore:hover,
+.jtpp .jtpp-loop-cue-restore:focus-visible {
 	color: color-mix(in srgb, currentcolor 92%, #000);
 	border-color: var(--jtpp-loop);
 	background: color-mix(in srgb, var(--jtpp-loop) 16%, transparent);
 	outline: none;
 }
 
-.jtpp-loop-save-cancel,
-.jtpp-loop-cue-delete {
+.jtpp .jtpp-loop-save-cancel {
 	border-color: var(--jtpp-line);
 	color: var(--jtpp-muted);
 	background: transparent;
 }
 
-.jtpp-loop-save-cancel:hover,
-.jtpp-loop-save-cancel:focus-visible,
-.jtpp-loop-cue-delete:hover,
-.jtpp-loop-cue-delete:focus-visible {
+.jtpp .jtpp-loop-save-cancel:hover,
+.jtpp .jtpp-loop-save-cancel:focus-visible {
 	color: color-mix(in srgb, currentcolor 92%, #000);
 	border-color: var(--jtpp-line);
 	background: color-mix(in srgb, currentcolor 5%, transparent);
@@ -1537,7 +1533,7 @@
 	}
 
 	.jtpp-loop-summary,
-	.jtpp-loop-save,
+	.jtpp .jtpp-loop-save,
 	.jtpp-zoom-controls {
 		justify-content: center;
 	}
@@ -1588,8 +1584,8 @@
 		grid-column: 1 / -1;
 	}
 
-	.jtpp-loop-cue-restore,
-	.jtpp-loop-cue-delete {
+	.jtpp .jtpp-loop-cue-restore,
+	.jtpp .jtpp-loop-cue-delete {
 		justify-content: center;
 		text-align: center;
 	}

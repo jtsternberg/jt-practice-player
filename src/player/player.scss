@@ -439,6 +439,11 @@
 }
 
 .jtpp-now-playing {
+	position: relative;
+	// Lift the whole now-playing row (which hosts the overflow menu) above the
+	// later panel siblings — esp. .jtpp-controls (z-index:1) — so the open …
+	// menu, which overflows downward, paints over the transport row.
+	z-index: 2;
 	display: flex;
 	align-items: center;
 	gap: 13px;
@@ -1916,4 +1921,85 @@
 // (flex:0 1 auto) yields the space so the screen still fits.
 .jtpp.is-fullscreen .jtpp-waveform:not([hidden]) {
 	min-height: 96px;
+}
+
+// =========================================================================
+// Now-playing overflow (…) menu (task a9y.9): per-current-track
+// Download / Share / Remove from queue. Sits beside Set loop on the
+// now-playing header, on all tiers.
+// =========================================================================
+.jtpp-more-wrap {
+	position: relative;
+	flex: 0 0 auto;
+}
+
+.jtpp .jtpp-more {
+	display: inline-flex;
+	width: 32px;
+	height: 32px;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	border: 0;
+	border-radius: 999px;
+	color: var(--jtpp-muted);
+	background: transparent;
+	box-shadow: none;
+	cursor: pointer;
+	transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.jtpp .jtpp-more:hover,
+.jtpp .jtpp-more:focus-visible {
+	color: var(--jtpp-accent);
+	background: var(--jtpp-active);
+	outline: none;
+}
+
+.jtpp-more-menu {
+	position: absolute;
+	top: calc(100% + 6px);
+	right: 0;
+	z-index: 30;
+	min-width: 190px;
+	padding: 6px;
+	border: 1px solid var(--jtpp-line);
+	border-radius: 10px;
+	background: color-mix(in srgb, CanvasText 7%, Canvas);
+	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.jtpp-more-menu[hidden] {
+	display: none;
+}
+
+.jtpp .jtpp-more-menu button[role="menuitem"] {
+	display: block;
+	width: 100%;
+	padding: 9px 10px;
+	border: 0;
+	border-radius: 6px;
+	color: inherit;
+	background: transparent;
+	box-shadow: none;
+	font: inherit;
+	font-size: 0.9rem;
+	font-weight: 500;
+	letter-spacing: 0;
+	text-align: left;
+	text-transform: none;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.jtpp .jtpp-more-menu button[role="menuitem"]:hover,
+.jtpp .jtpp-more-menu button[role="menuitem"]:focus-visible {
+	color: var(--jtpp-accent);
+	background: var(--jtpp-active);
+	outline: none;
+}
+
+// Keep loop-edit mode uncluttered — the overflow menu is hidden while editing.
+.jtpp.is-loop-editing .jtpp-more-wrap {
+	display: none;
 }

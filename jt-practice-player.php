@@ -336,6 +336,14 @@ function render_player( array $tracks, array $options ): string {
 				<button type="button" class="jtpp-loop-edit"><?php esc_html_e( 'Set loop', 'jt-practice-player' ); ?></button>
 				<button type="button" class="jtpp-loop-edit-done" hidden><?php esc_html_e( 'Done', 'jt-practice-player' ); ?></button>
 			</div>
+			<div class="jtpp-more-wrap">
+				<button type="button" class="jtpp-more" aria-haspopup="menu" aria-expanded="false" aria-label="<?php esc_attr_e( 'More actions', 'jt-practice-player' ); ?>"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="5" cy="12" r="1.7"></circle><circle cx="12" cy="12" r="1.7"></circle><circle cx="19" cy="12" r="1.7"></circle></svg></button>
+				<div class="jtpp-more-menu" role="menu" hidden>
+					<button type="button" role="menuitem" class="jtpp-more-download"><?php esc_html_e( 'Download', 'jt-practice-player' ); ?></button>
+					<button type="button" role="menuitem" class="jtpp-more-share"><?php esc_html_e( 'Share', 'jt-practice-player' ); ?></button>
+					<button type="button" role="menuitem" class="jtpp-more-remove"><?php esc_html_e( 'Remove from queue', 'jt-practice-player' ); ?></button>
+				</div>
+			</div>
 		</div>
 		<div class="jtpp-timeline" role="slider" tabindex="0" aria-label="<?php esc_attr_e( 'Playback position', 'jt-practice-player' ); ?>" aria-valuemin="0" aria-valuenow="0">
 			<div class="jtpp-timeline-gradient"></div>

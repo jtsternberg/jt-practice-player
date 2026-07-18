@@ -216,6 +216,7 @@ export class PracticePlayer {
 		this.storageTrackIds = this.tracks.map( ( track ) => track.id );
 		this.savedLoopsByTrack = loadSavedLoopsMap( this.storageTrackIds );
 		this.activeIndex = 0;
+		this.moreMenuOpen = false;
 		this.dragIndex = null;
 		this.loop = null;
 		this.region = null;
@@ -343,6 +344,9 @@ export class PracticePlayer {
 		this.randomButton = this.rootEl.querySelector( '.jtpp-random' );
 		this.fullscreenButton = this.rootEl.querySelector( '.jtpp-fullscreen' );
 		this.fsCloseButton = this.rootEl.querySelector( '.jtpp-fs-close' );
+		this.moreWrap = this.rootEl.querySelector( '.jtpp-more-wrap' );
+		this.moreButton = this.rootEl.querySelector( '.jtpp-more' );
+		this.moreMenu = this.rootEl.querySelector( '.jtpp-more-menu' );
 		this.loopToolsEl = this.rootEl.querySelector( '.jtpp-loop-tools' );
 		this.loopCurrentEl = this.rootEl.querySelector( '.jtpp-loop-current' );
 		this.loopSavedEl = this.rootEl.querySelector( '.jtpp-loop-saved' );
@@ -386,6 +390,19 @@ export class PracticePlayer {
 		this.fsCloseButton?.addEventListener( 'click', () =>
 			this.toggleFullscreen()
 		);
+		this.moreButton?.addEventListener( 'click', ( event ) => {
+			event.stopPropagation();
+			this.toggleMoreMenu();
+		} );
+		this.moreMenu
+			?.querySelector( '.jtpp-more-download' )
+			?.addEventListener( 'click', () => this.handleMoreDownload() );
+		this.moreMenu
+			?.querySelector( '.jtpp-more-share' )
+			?.addEventListener( 'click', () => this.handleMoreShare() );
+		this.moreMenu
+			?.querySelector( '.jtpp-more-remove' )
+			?.addEventListener( 'click', () => this.handleMoreRemove() );
 		this.loopClearButton?.addEventListener( 'click', () =>
 			this.clearLoopRegion()
 		);
@@ -1391,6 +1408,133 @@ export class PracticePlayer {
 		this.fullscreenReturnFocus = null;
 	}
 
+	// Now-playing overflow menu (…): per-current-track Download / Share /
+	// Remove from queue. Accessible popup — Escape and click-outside close it,
+	// focus moves in on open and back to the trigger on close.
+	toggleMoreMenu() {
+		if ( this.moreMenuOpen ) {
+			this.closeMoreMenu();
+		} else {
+			this.openMoreMenu();
+		}
+	}
+
+	openMoreMenu() {
+		if ( ! this.moreMenu || this.moreMenuOpen ) {
+			return;
+		}
+		this.moreMenuOpen = true;
+		this.moreMenu.hidden = false;
+		this.moreButton?.setAttribute( 'aria-expanded', 'true' );
+		this.moreOutsideHandler = ( event ) => {
+			if ( ! this.moreWrap?.contains( event.target ) ) {
+				this.closeMoreMenu( false );
+			}
+		};
+		// Defer so the click that opened the menu doesn't immediately close it.
+		setTimeout(
+			() => document.addEventListener( 'click', this.moreOutsideHandler ),
+			0
+		);
+		this.moreMenu.querySelector( '[role="menuitem"]' )?.focus();
+	}
+
+	closeMoreMenu( returnFocus = true ) {
+		if ( ! this.moreMenu || ! this.moreMenuOpen ) {
+			return;
+		}
+		this.moreMenuOpen = false;
+		this.moreMenu.hidden = true;
+		this.moreButton?.setAttribute( 'aria-expanded', 'false' );
+		if ( this.moreOutsideHandler ) {
+			document.removeEventListener( 'click', this.moreOutsideHandler );
+			this.moreOutsideHandler = null;
+		}
+		if ( returnFocus ) {
+			this.moreButton?.focus();
+		}
+	}
+
+	handleMoreDownload() {
+		const track = this.currentTrack();
+		if ( track?.url ) {
+			const link = document.createElement( 'a' );
+			link.href = track.url;
+			link.download = '';
+			document.body.appendChild( link );
+			link.click();
+			link.remove();
+		}
+		this.closeMoreMenu();
+	}
+
+	handleMoreShare() {
+		const url = this.getShareUrl();
+		const item = this.moreMenu?.querySelector( '.jtpp-more-share' );
+		const flash = ( label ) => {
+			if ( ! item ) {
+				this.closeMoreMenu( false );
+				return;
+			}
+			if ( ! item.dataset.label ) {
+				item.dataset.label = item.textContent;
+			}
+			item.textContent = label;
+			setTimeout( () => {
+				item.textContent = item.dataset.label;
+				this.closeMoreMenu( false );
+			}, 1200 );
+		};
+		const copyToClipboard = () => {
+			if ( window.navigator.clipboard?.writeText ) {
+				window.navigator.clipboard
+					.writeText( url )
+					.then( () => flash( 'Link copied!' ) )
+					.catch( () => flash( 'Copy failed' ) );
+			} else {
+				flash( 'Copy unavailable' );
+			}
+		};
+		// Prefer the native share sheet on touch devices; on desktop (and as a
+		// fallback) copy the link to the clipboard, which is the reliable path.
+		const coarsePointer =
+			window.matchMedia &&
+			window.matchMedia( '(pointer: coarse)' ).matches;
+		if ( coarsePointer && window.navigator.share ) {
+			window.navigator
+				.share( { url } )
+				.then( () => this.closeMoreMenu( false ) )
+				.catch( () => copyToClipboard() );
+			return;
+		}
+		copyToClipboard();
+	}
+
+	handleMoreRemove() {
+		const track = this.currentTrack();
+		if ( ! track ) {
+			this.closeMoreMenu();
+			return;
+		}
+		const check = this.queueChecks.find(
+			( item ) => Number( item.dataset.index ) === this.activeIndex
+		);
+		if ( check ) {
+			check.checked = false;
+			this.checkedIds = this.queueChecks
+				.filter( ( item ) => item.checked )
+				.map(
+					( item ) => this.tracks[ Number( item.dataset.index ) ].id
+				);
+			saveQueue( this.storageTrackIds, this.checkedIds );
+		}
+		this.closeMoreMenu();
+		// Move off the just-removed track to the next queued one, keeping
+		// playback going if it was playing.
+		const wasPlaying = this.rootEl.classList.contains( 'is-playing' );
+		this.advance( 1, wasPlaying );
+	}
+
 	// Build a shareable deep link that reconstructs the current view: track,
 	// active loop (start/end), playback rate, and a fullscreen flag. Callable
 	// directly (e.g. from the console or a future Share menu, task a9y.9).
@@ -2229,7 +2373,9 @@ export class PracticePlayer {
 		// of the way of native Escape behavior (e.g. exiting fullscreen). When
 		// not editing a loop, Escape closes the overlay-modal fallback (native
 		// fullscreen handles its own Escape via the browser).
-		if ( this.loopEditing ) {
+		if ( this.moreMenuOpen ) {
+			handlers.Escape = () => this.closeMoreMenu();
+		} else if ( this.loopEditing ) {
 			handlers.Escape = () => this.exitLoopEditMode();
 		} else if ( this.fullscreenModal ) {
 			handlers.Escape = () => this.exitFullscreenModal();

@@ -1925,6 +1925,44 @@
 	min-height: 96px;
 }
 
+// Blurred current-artwork fills the WHOLE overlay at every size, so the
+// background reaches all edges — no flat-dark frame around the content on
+// mobile. --jtpp-artwork-glow is set on the root by updateArtworkGlow().
+.jtpp.is-fullscreen::before {
+	position: fixed;
+	z-index: 0;
+	inset: 0;
+	background-image: var(--jtpp-artwork-glow, none);
+	background-repeat: no-repeat;
+	background-position: center;
+	background-size: cover;
+	transform: scale(1.15);
+	filter: blur(64px) saturate(1.5);
+	content: "";
+	pointer-events: none;
+}
+
+// Scrim over the wash keeps text at AA contrast, light + dark.
+.jtpp.is-fullscreen::after {
+	position: fixed;
+	z-index: 0;
+	inset: 0;
+	background: color-mix(in srgb, Canvas 64%, transparent);
+	content: "";
+	pointer-events: none;
+}
+
+// Content rides above the wash.
+.jtpp.is-fullscreen .jtpp-shell {
+	position: relative;
+	z-index: 1;
+}
+
+// The panel-level card wash is redundant behind the full-overlay fill.
+.jtpp.is-fullscreen .jtpp-artwork-glow {
+	display: none;
+}
+
 // Wide screens (desktop / tablet landscape): the full-height flex column
 // looks sparse — a skinny stretched column with big vertical gaps and black
 // side voids. Instead center the now-playing content as a cohesive card and
@@ -2042,32 +2080,6 @@
 // =========================================================================
 @media (min-width: 1024px) {
 
-	// Blurred current-artwork fills the whole overlay behind the content.
-	// --jtpp-artwork-glow is set on the root by updateArtworkGlow().
-	.jtpp.is-fullscreen::before {
-		position: fixed;
-		z-index: 0;
-		inset: 0;
-		background-image: var(--jtpp-artwork-glow, none);
-		background-repeat: no-repeat;
-		background-position: center;
-		background-size: cover;
-		transform: scale(1.15);
-		filter: blur(64px) saturate(1.5);
-		content: "";
-		pointer-events: none;
-	}
-
-	// Scrim over the wash keeps title/list text at AA contrast, light + dark.
-	.jtpp.is-fullscreen::after {
-		position: fixed;
-		z-index: 0;
-		inset: 0;
-		background: color-mix(in srgb, Canvas 64%, transparent);
-		content: "";
-		pointer-events: none;
-	}
-
 	// Content rides above the wash. A deterministic 2-column grid: now-playing
 	// on the left (col 1), playlist on the right (col 2). Grid placement is set
 	// explicitly so DOM order (tracklist first) doesn't matter.
@@ -2095,11 +2107,6 @@
 
 	.jtpp.is-fullscreen .jtpp-artwork {
 		max-width: min(360px, 44vh);
-	}
-
-	// The panel-level card wash is redundant behind the full-overlay fill.
-	.jtpp.is-fullscreen .jtpp-artwork-glow {
-		display: none;
 	}
 
 	// Playlist as a scrollable side column over the wash.

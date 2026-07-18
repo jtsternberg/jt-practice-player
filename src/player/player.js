@@ -1387,10 +1387,40 @@ export class PracticePlayer {
 		);
 		lockBodyScroll();
 		this.reflectFullscreen();
-		// Move focus into the modal so keyboard shortcuts (incl. Escape) and
-		// screen readers land inside it. Full focus-trap cycling is deferred to
-		// the a11y task (jt-practice-player-a9y.6).
-		( this.fullscreenButton || this.rootEl ).focus?.();
+		// Trap Tab within the overlay while it is open (native fullscreen traps
+		// focus itself, so this is only needed for the modal fallback).
+		this.focusTrapHandler = ( event ) => this.trapModalFocus( event );
+		this.rootEl.addEventListener( 'keydown', this.focusTrapHandler );
+		// Move focus to the visible exit chevron — the in-cluster fullscreen
+		// button is hidden in fullscreen — so keyboard + screen readers land
+		// inside the modal.
+		( this.fsCloseButton || this.rootEl ).focus?.();
+	}
+
+	// Keep Tab focus cycling inside the overlay modal (a9y.6). Only visible
+	// focusables participate, so the hidden tracklist / loop tools are skipped.
+	trapModalFocus( event ) {
+		if ( event.key !== 'Tab' || ! this.fullscreenModal ) {
+			return;
+		}
+		const focusable = Array.from(
+			this.rootEl.querySelectorAll(
+				'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+			)
+		).filter( ( el ) => el.offsetParent !== null );
+		if ( ! focusable.length ) {
+			return;
+		}
+		const first = focusable[ 0 ];
+		const last = focusable[ focusable.length - 1 ];
+		const activeEl = this.rootEl.ownerDocument.activeElement;
+		if ( event.shiftKey && activeEl === first ) {
+			event.preventDefault();
+			last.focus();
+		} else if ( ! event.shiftKey && activeEl === last ) {
+			event.preventDefault();
+			first.focus();
+		}
 	}
 
 	exitFullscreenModal() {
@@ -1402,6 +1432,10 @@ export class PracticePlayer {
 		this.rootEl.removeAttribute( 'role' );
 		this.rootEl.removeAttribute( 'aria-modal' );
 		this.rootEl.removeAttribute( 'aria-label' );
+		if ( this.focusTrapHandler ) {
+			this.rootEl.removeEventListener( 'keydown', this.focusTrapHandler );
+			this.focusTrapHandler = null;
+		}
 		unlockBodyScroll();
 		this.reflectFullscreen();
 		this.fullscreenReturnFocus?.focus?.();

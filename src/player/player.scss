@@ -571,44 +571,19 @@
 	pointer-events: none;
 }
 
+// Remainder track: a calm, subtle neutral so the elapsed accent reads clearly.
 .jtpp-timeline-gradient {
 	right: 0;
 	left: 0;
-	background:
-		linear-gradient(90deg, color-mix(in srgb, var(--jtpp-accent) 20%, transparent), color-mix(in srgb, var(--jtpp-loop) 20%, transparent)),
-		color-mix(in srgb, currentcolor 8%, transparent);
-	background-size: 200% 100%, auto;
-	animation: jtpp-timeline-drift 6s linear infinite;
+	background: color-mix(in srgb, currentcolor 15%, transparent);
 }
 
+// Elapsed: solid accent, no animation.
 .jtpp-timeline-progress {
 	left: 0;
 	width: calc(var(--jtpp-progress) * 100%);
 	overflow: hidden;
-	background: color-mix(in srgb, var(--jtpp-accent) 78%, transparent);
-}
-
-// Progress shimmer: a barely-perceptible sheen drifting across the played
-// portion while playing only. Disabled for reduced-motion users below.
-.jtpp.is-playing .jtpp-timeline-progress::after {
-	position: absolute;
-	inset: 0;
-	background: linear-gradient(90deg, transparent, color-mix(in srgb, #fff 26%, transparent), transparent);
-	background-size: 200% 100%;
-	content: "";
-	pointer-events: none;
-	animation: jtpp-progress-shimmer 2.8s linear infinite;
-}
-
-@keyframes jtpp-progress-shimmer {
-
-	from {
-		background-position: 150% 0;
-	}
-
-	to {
-		background-position: -50% 0;
-	}
+	background: var(--jtpp-accent);
 }
 
 .jtpp-timeline-playhead {
@@ -622,26 +597,6 @@
 	box-shadow: 0 0 0 1px #fff;
 	transform: translate(-50%, -50%);
 	pointer-events: none;
-}
-
-@keyframes jtpp-timeline-drift {
-
-	to {
-		background-position: 200% 0, 0 0;
-	}
-}
-
-@media (prefers-reduced-motion: reduce) {
-
-	.jtpp-timeline-gradient {
-		animation: none;
-	}
-
-	// The shimmer pseudo carries no meaning; drop it entirely at rest.
-	.jtpp.is-playing .jtpp-timeline-progress::after {
-		content: none;
-		animation: none;
-	}
 }
 
 .jtpp-waveform {

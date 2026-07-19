@@ -78,6 +78,11 @@ const REPEAT_OFF = 'off';
 const REPEAT_PLAYLIST = 'playlist';
 const REPEAT_TRACK = 'track';
 const AUDIO_CACHE_LIMIT = 10;
+// Prev-button restart threshold: clicking Prev restarts the current track
+// unless we're within this many seconds of the start, matching common players.
+const PREV_RESTART_THRESHOLD = 3;
+// Cap on the shuffle history stack so long sessions can't grow it unbounded.
+const SHUFFLE_HISTORY_LIMIT = 100;
 const SAVED_LOOP_LIMIT = 20;
 const PEAK_CHANNELS = 2;
 const PEAK_SAMPLES = 8000;
@@ -251,6 +256,12 @@ export class PracticePlayer {
 		this.volume = loadVolume();
 		this.repeatMode = this.options.playlist ? REPEAT_OFF : null;
 		this.randomMode = false;
+		// Shuffle history: track ids in visit order, with a pointer at the
+		// current track. next past the newest entry picks a fresh random track
+		// (truncating any walked-back forward tail); prev/next walk this stack
+		// so navigation is idempotent (prev then next returns the same track).
+		this.shuffleHistory = [];
+		this.shufflePointer = -1;
 
 		this.cacheElements();
 		this.restoreOrder();
@@ -470,7 +481,7 @@ export class PracticePlayer {
 			?.addEventListener( 'click', () => this.skip( 15 ) );
 		this.rootEl
 			.querySelector( '.jtpp-prev' )
-			?.addEventListener( 'click', () => this.advance( -1, true ) );
+			?.addEventListener( 'click', () => this.previousOrRestart() );
 		this.rootEl
 			.querySelector( '.jtpp-next' )
 			?.addEventListener( 'click', () => this.advance( 1, true ) );
@@ -1291,10 +1302,22 @@ export class PracticePlayer {
 		this.transport?.pause();
 	}
 
+	// Prev button / MediaTrackPrevious: restart the current track first, and
+	// only step to the previous track when already near the start (common
+	// player behavior). The dedicated .jtpp-start button always restarts.
+	previousOrRestart() {
+		const position = this.transport?.snapshot().position ?? 0;
+		if ( position > PREV_RESTART_THRESHOLD ) {
+			this.seekStart();
+			return;
+		}
+		this.advance( -1, true );
+	}
+
 	// Media Session action surface: the adapter routes system controls
 	// (lock screen, CarPlay, hardware keys) through these methods.
 	previous() {
-		this.advance( -1, true );
+		this.previousOrRestart();
 	}
 
 	next() {
@@ -1363,6 +1386,10 @@ export class PracticePlayer {
 			return;
 		}
 		this.randomMode = ! this.randomMode;
+		// Start each shuffle session from a clean history rooted at whatever is
+		// playing now (rebuilt lazily on the first shuffle nav via the anchor).
+		this.shuffleHistory = [];
+		this.shufflePointer = -1;
 		this.reflectPlaybackModes();
 	}
 
@@ -2303,7 +2330,10 @@ export class PracticePlayer {
 	}
 
 	advance( direction, autoplay, wrap = true ) {
-		const nextIndex = this.nextQueuedIndex( direction, wrap );
+		const nextIndex =
+			this.randomMode && this.options.playlist
+				? this.shuffleAdvance( direction )
+				: this.nextQueuedIndex( direction, wrap );
 		if ( nextIndex === null ) {
 			return;
 		}
@@ -2320,6 +2350,99 @@ export class PracticePlayer {
 			Math.random,
 			wrap
 		);
+	}
+
+	// Indices eligible for playback: checked queue rows, or all tracks when the
+	// queue is empty (mirrors nextPlaylistIndex's "playable" fallback).
+	playableIndices() {
+		const checked = this.tracks
+			.map( ( track, index ) =>
+				this.checkedIds.includes( track.id ) ? index : null
+			)
+			.filter( ( index ) => index !== null );
+		return checked.length
+			? checked
+			: this.tracks.map( ( _track, index ) => index );
+	}
+
+	indexOfTrackId( id ) {
+		return this.tracks.findIndex( ( track ) => track.id === id );
+	}
+
+	// Keep the history pointer anchored on the current track. Any load that
+	// wasn't a shuffle-history step (direct track click, restore, first shuffle
+	// nav) starts a fresh history rooted at the current track.
+	syncShuffleAnchor() {
+		const track = this.currentTrack();
+		if ( ! track ) {
+			return;
+		}
+		const id = track.id;
+		if (
+			this.shufflePointer < 0 ||
+			this.shuffleHistory[ this.shufflePointer ] !== id
+		) {
+			this.shuffleHistory = [ id ];
+			this.shufflePointer = 0;
+		}
+	}
+
+	// Shuffle navigation via a history stack so prev/next are idempotent.
+	// Forward: reuse an existing forward entry if we've walked back, else pick a
+	// fresh random track (excluding the current one) and truncate the tail.
+	// Back: step to the most recent still-playable earlier entry. Stale entries
+	// (tracks removed from the queue or list) are skipped, dropping them
+	// gracefully. Returns a track index, or null when there's nowhere to go.
+	shuffleAdvance( direction ) {
+		this.syncShuffleAnchor();
+		const playable = new Set( this.playableIndices() );
+		if ( ! playable.size ) {
+			return null;
+		}
+
+		if ( direction < 0 ) {
+			for ( let i = this.shufflePointer - 1; i >= 0; i-- ) {
+				const idx = this.indexOfTrackId( this.shuffleHistory[ i ] );
+				if ( idx !== -1 && playable.has( idx ) ) {
+					this.shufflePointer = i;
+					return idx;
+				}
+			}
+			return null;
+		}
+
+		for (
+			let i = this.shufflePointer + 1;
+			i < this.shuffleHistory.length;
+			i++
+		) {
+			const idx = this.indexOfTrackId( this.shuffleHistory[ i ] );
+			if ( idx !== -1 && playable.has( idx ) ) {
+				this.shufflePointer = i;
+				return idx;
+			}
+		}
+
+		const candidates = [ ...playable ].filter(
+			( index ) => index !== this.activeIndex
+		);
+		if ( ! candidates.length ) {
+			return null;
+		}
+		const idx =
+			candidates[ Math.floor( Math.random() * candidates.length ) ];
+		this.shuffleHistory = this.shuffleHistory.slice(
+			0,
+			this.shufflePointer + 1
+		);
+		this.shuffleHistory.push( this.tracks[ idx ].id );
+		this.shufflePointer = this.shuffleHistory.length - 1;
+		if ( this.shuffleHistory.length > SHUFFLE_HISTORY_LIMIT ) {
+			const overflow = this.shuffleHistory.length - SHUFFLE_HISTORY_LIMIT;
+			this.shuffleHistory.splice( 0, overflow );
+			this.shufflePointer -= overflow;
+		}
+		return idx;
 	}
 
 	updateActiveTrack() {
@@ -2442,7 +2565,7 @@ export class PracticePlayer {
 			MediaPlayPause: () => this.togglePlay(),
 			MediaPlay: () => this.play(),
 			MediaPause: () => this.pause(),
-			MediaTrackPrevious: () => this.advance( -1, true ),
+			MediaTrackPrevious: () => this.previousOrRestart(),
 			MediaTrackNext: () => this.advance( 1, true ),
 		};
 		// Escape exits loop edit mode only while it is active, so it stays out

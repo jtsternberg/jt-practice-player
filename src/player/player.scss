@@ -578,12 +578,87 @@
 	background: color-mix(in srgb, currentcolor 15%, transparent);
 }
 
-// Elapsed: solid accent, no animation.
+// Elapsed fill: a "comet" gradient that warms toward the leading edge
+// (playhead). Colors derive from the theme accent via color-mix so themed
+// players (e.g. the green playlist) get an accent-matched warm trail rather
+// than a hardcoded orange. overflow:hidden clips the sheen/glow pseudos to the
+// elapsed portion only. Motion lives on the ::before/::after pseudos, gated on
+// .is-playing below.
 .jtpp-timeline-progress {
 	left: 0;
 	width: calc(var(--jtpp-progress) * 100%);
 	overflow: hidden;
-	background: var(--jtpp-accent);
+	background: linear-gradient(90deg, var(--jtpp-accent) 78%, color-mix(in srgb, var(--jtpp-accent) 82%, #fff) 93%, color-mix(in srgb, var(--jtpp-accent) 62%, #fff) 100%);
+}
+
+// Comet glow: a warm, brightening zone at the leading edge (playhead side).
+// Static (paused) sits at 0.4 opacity; it pulses only while playing.
+.jtpp-timeline-progress::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	width: 12%;
+	background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--jtpp-accent) 55%, #fff));
+	opacity: 0.4;
+	pointer-events: none;
+}
+
+// Refined sheen: a narrow, low-opacity neutral highlight that sweeps across the
+// elapsed fill. Parked off-screen at rest so nothing shows when paused; the
+// sweep animation runs only while playing.
+.jtpp-timeline-progress::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.22) 50%, transparent 70%);
+	background-repeat: no-repeat;
+	background-size: 220px 100%;
+	background-position: -220px 0;
+	pointer-events: none;
+}
+
+// Motion only while playing (root gets .is-playing in onPlay/onPause).
+.jtpp.is-playing .jtpp-timeline-progress::before {
+	animation: jtpp-comet-pulse 2.2s ease-in-out infinite;
+}
+
+.jtpp.is-playing .jtpp-timeline-progress::after {
+	animation: jtpp-sheen 3.4s ease-in-out infinite;
+}
+
+@keyframes jtpp-sheen {
+
+	0% {
+		background-position: -220px 0;
+	}
+
+	55%,
+	100% {
+		background-position: calc(100% + 220px) 0;
+	}
+}
+
+@keyframes jtpp-comet-pulse {
+
+	0%,
+	100% {
+		opacity: 0.4;
+	}
+
+	50% {
+		opacity: 0.8;
+	}
+}
+
+// Reduced motion: no animation at all — the warm fill stays, but nothing moves.
+@media (prefers-reduced-motion: reduce) {
+
+	.jtpp.is-playing .jtpp-timeline-progress::before,
+	.jtpp.is-playing .jtpp-timeline-progress::after {
+		animation: none;
+	}
 }
 
 .jtpp-timeline-playhead {

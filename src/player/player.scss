@@ -2200,3 +2200,23 @@
 		overflow-y: auto;
 	}
 }
+
+// =========================================================================
+// Loop tools outside edit mode: the "Save cue" button and the selection-zoom
+// controls (− / Fit loop / +) only make sense while editing a loop, so gate
+// them to .is-loop-editing. Outside edit mode only the loop summary chip
+// (LOOP / range / × clear) remains. Placed after all loop-tools rules on
+// every tier so higher-specificity gating never descends (no-descending-
+// specificity) and applies across docked (baseline/compact/tight) + fullscreen.
+// =========================================================================
+.jtpp:not(.is-loop-editing) .jtpp-loop-save,
+.jtpp:not(.is-loop-editing) .jtpp-zoom-controls {
+	display: none;
+}
+
+// With the two edit-only items gone, keep the lone summary chip centered on
+// tiers that stretch the row while editing (compact/tight override the base
+// centering to justify-content:stretch).
+.jtpp:not(.is-loop-editing) .jtpp-loop-current {
+	justify-content: center;
+}

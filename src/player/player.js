@@ -98,6 +98,10 @@ const SHARE_PARAM_LOOP = 'jtpp-loop';
 const SHARE_PARAM_RATE = 'jtpp-rate';
 const SHARE_PARAM_FS = 'jtpp-fs';
 
+// Monotonic counter for generating unique queue-drawer ids (aria-controls
+// targets) when a page hosts more than one player.
+let JTPP_QUEUE_ID = 0;
+
 function roundShareTime( seconds ) {
 	return Math.round( seconds * 100 ) / 100;
 }
@@ -344,6 +348,7 @@ export class PracticePlayer {
 		this.randomButton = this.rootEl.querySelector( '.jtpp-random' );
 		this.fullscreenButton = this.rootEl.querySelector( '.jtpp-fullscreen' );
 		this.fsCloseButton = this.rootEl.querySelector( '.jtpp-fs-close' );
+		this.fsQueueButton = this.rootEl.querySelector( '.jtpp-fs-queue' );
 		this.moreWrap = this.rootEl.querySelector( '.jtpp-more-wrap' );
 		this.moreButton = this.rootEl.querySelector( '.jtpp-more' );
 		this.moreMenu = this.rootEl.querySelector( '.jtpp-more-menu' );
@@ -390,6 +395,22 @@ export class PracticePlayer {
 		this.fsCloseButton?.addEventListener( 'click', () =>
 			this.toggleFullscreen()
 		);
+		// Desktop-fullscreen queue drawer toggle. Wire aria-controls to the
+		// track list (assign an id if it lacks one so multiple players stay
+		// unique). Toggling only flips a root class — playback is untouched.
+		if ( this.fsQueueButton && this.trackList ) {
+			if ( ! this.trackList.id ) {
+				JTPP_QUEUE_ID += 1;
+				this.trackList.id = `jtpp-queue-${ JTPP_QUEUE_ID }`;
+			}
+			this.fsQueueButton.setAttribute(
+				'aria-controls',
+				this.trackList.id
+			);
+			this.fsQueueButton.addEventListener( 'click', () =>
+				this.toggleQueue()
+			);
+		}
 		this.moreButton?.addEventListener( 'click', ( event ) => {
 			event.stopPropagation();
 			this.toggleMoreMenu();
@@ -1346,6 +1367,22 @@ export class PracticePlayer {
 		this.enterFullscreenModal();
 	}
 
+	// Desktop-fullscreen queue drawer: toggles a root class the SCSS keys off
+	// (only rendered at >=1024px in fullscreen). Never touches playback state.
+	toggleQueue() {
+		this.setQueueOpen(
+			! this.rootEl.classList.contains( 'is-queue-open' )
+		);
+	}
+
+	setQueueOpen( open ) {
+		this.rootEl.classList.toggle( 'is-queue-open', open );
+		this.fsQueueButton?.setAttribute(
+			'aria-expanded',
+			open ? 'true' : 'false'
+		);
+	}
+
 	// Class-driven fullscreen fallback: a fixed overlay that covers all site
 	// chrome, used where the native Fullscreen API can't fullscreen this
 	// element. Shares the .is-fullscreen styling with the native path.
@@ -1409,6 +1446,8 @@ export class PracticePlayer {
 			return;
 		}
 		this.fullscreenModal = false;
+		// Exiting fullscreen also closes/resets the queue drawer.
+		this.setQueueOpen( false );
 		this.rootEl.classList.remove( 'is-fullscreen-modal' );
 		this.rootEl.removeAttribute( 'role' );
 		this.rootEl.removeAttribute( 'aria-modal' );

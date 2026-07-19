@@ -305,6 +305,8 @@ function render_player( array $tracks, array $options ): string {
 	<div class="jtpp-shell">
 	<?php endif; ?>
 	<?php if ( $options['playlist'] ) : ?>
+	<button type="button" class="jtpp-fs-queue" aria-expanded="false" aria-label="<?php esc_attr_e( 'Toggle queue', 'jt-practice-player' ); ?>"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg><span><?php esc_html_e( 'Queue', 'jt-practice-player' ); ?></span></button>
+	<div class="jtpp-queue">
 	<ol class="jtpp-tracklist">
 		<?php foreach ( $tracks as $i => $track ) : ?>
 		<li class="jtpp-track-row" data-index="<?php echo esc_attr( $i ); ?>">
@@ -321,6 +323,7 @@ function render_player( array $tracks, array $options ): string {
 		</li>
 		<?php endforeach; ?>
 	</ol>
+	</div>
 	<?php endif; ?>
 	<div class="jtpp-panel">
 		<div class="jtpp-artwork-glow" aria-hidden="true"></div>

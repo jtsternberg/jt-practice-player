@@ -123,6 +123,13 @@
 }
 
 
+// Transparent wrapper: the queue <ol> behaves as a direct shell grid item
+// normally (display:contents removes this box). It only becomes a real box —
+// the right-side drawer — in desktop fullscreen with the queue open.
+.jtpp-queue {
+	display: contents;
+}
+
 .jtpp-tracklist {
 	display: grid;
 	gap: 2px;
@@ -1838,6 +1845,12 @@
 	display: none;
 }
 
+// Queue toggle pill: hidden everywhere except desktop (>=1024px) fullscreen,
+// where the >=1024 block below reveals and positions it top-right.
+.jtpp-fs-queue {
+	display: none;
+}
+
 .jtpp.is-fullscreen .jtpp-fs-close {
 	display: inline-flex;
 	flex: 0 0 auto;
@@ -2086,54 +2099,104 @@
 }
 
 // =========================================================================
-// Wide-screen fullscreen (a9y.14): blurred-artwork fill + side playlist.
-// Gated to >=1024px so mobile fullscreen keeps its fit-to-viewport phone
-// layout untouched. On desktop the flat-black void becomes an ambient blur
-// of the current artwork, and the extra width shows the playlist alongside
-// the now-playing.
+// Wide-screen fullscreen (Focus): one large centered now-playing column with
+// the queue hidden behind a top-right toggle. Gated to >=1024px so mobile and
+// the 700–1023 card layout stay untouched. Opening the queue slides in a
+// right-side overlay drawer and nudges the now-playing column left.
 // =========================================================================
 @media (min-width: 1024px) {
 
-	// Content rides above the wash. A deterministic 2-column grid: now-playing
-	// on the left (col 1), playlist on the right (col 2). Grid placement is set
-	// explicitly so DOM order (tracklist first) doesn't matter.
-	// Two content-sized columns centered together as one unit (justify-content),
-	// so on wide/ultrawide screens they stay adjacent instead of drifting apart
-	// with a dead gap. now-playing = col 1, playlist = col 2.
+	// Shell spans the full overlay so the drawer can pin to the viewport edge;
+	// the now-playing panel is centered within it as a single column. Shell is
+	// position:relative (set in the base fullscreen block), so the absolutely
+	// positioned drawer and toggle anchor to it.
 	.jtpp.is-fullscreen .jtpp-shell {
-		position: relative;
-		z-index: 1;
-		display: grid;
-		grid-template-columns: minmax(0, 560px) minmax(0, 360px);
-		justify-content: center;
 		align-items: center;
-		gap: 40px;
-		width: min(100%, 1000px);
-		height: 100%;
-		margin: 0 auto;
+		justify-content: center;
+		width: 100%;
+		max-width: none;
 	}
 
+	// Now-playing = one centered column. It shifts left when the drawer opens.
 	.jtpp.is-fullscreen .jtpp-panel {
-		grid-column: 1;
-		width: 100%;
-		height: 100%;
+		flex: 0 1 auto;
 		justify-content: center;
+		width: min(92vw, 640px);
+		transition: transform 0.25s ease;
 	}
 
 	.jtpp.is-fullscreen .jtpp-artwork {
-		max-width: min(360px, 44vh);
+		max-width: min(44vh, 400px);
 	}
 
-	// Playlist as a scrollable side column over the wash.
-	.jtpp.is-fullscreen .jtpp-tracklist {
+	// Queue toggle pill, top-right of the overlay. Sits inside the fullscreen
+	// container so the focus trap covers it; stays put while the panel shifts.
+	.jtpp.is-fullscreen .jtpp-fs-queue {
+		display: inline-flex;
+		position: absolute;
+		z-index: 3;
+		top: 4px;
+		right: 4px;
+		align-items: center;
+		gap: 8px;
+		height: 40px;
+		padding: 0 16px;
+		border: 1px solid color-mix(in srgb, CanvasText 22%, transparent);
+		border-radius: 999px;
+		color: CanvasText;
+		background: color-mix(in srgb, #08070688 60%, transparent);
+		font: inherit;
+		font-size: 0.9rem;
+		font-weight: 500;
+		line-height: 1;
+		cursor: pointer;
+		transition: color 0.15s ease, background-color 0.15s ease;
+	}
+
+	.jtpp.is-fullscreen .jtpp-fs-queue:hover,
+	.jtpp.is-fullscreen .jtpp-fs-queue:focus-visible {
+		color: var(--jtpp-accent);
+		background: color-mix(in srgb, CanvasText 14%, transparent);
+		outline: none;
+	}
+
+	// Drawer open: nudge the centered column left by half the drawer width so
+	// it stays visually balanced against the incoming panel.
+	.jtpp.is-fullscreen.is-queue-open .jtpp-panel {
+		transform: translateX(calc(min(380px, 32vw) / -2));
+	}
+
+	// The wrapper becomes the drawer box: a full-height right-side overlay that
+	// vertically centers its (height-capped) track list.
+	.jtpp.is-fullscreen.is-queue-open .jtpp-queue {
+		display: flex;
+		position: absolute;
+		z-index: 2;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		flex-direction: column;
+		justify-content: center;
+		width: min(380px, 32vw);
+		padding: 9vh 24px 6vh;
+		background: linear-gradient(270deg, rgba(8, 7, 6, 0.72) 70%, transparent);
+	}
+
+	// The track list scrolls internally, capped so it never overflows the
+	// viewport or pins off the top: the drawer centers this capped box, while
+	// the list itself uses normal top-to-bottom flow for its overflow. Handles
+	// very long playlists (50+ tracks).
+	// display:block (not grid): each row is a self-contained grid sized to its
+	// own content in normal flow. As a grid, the list's auto row tracks take
+	// their base size from the row's explicit min-height:56px and — because a
+	// height-capped scroll container has no positive free space — never grow to
+	// fit a wrapped (multi-line) title, so overflowing text paints over the
+	// next row. Block flow removes the shared row-track budget entirely.
+	.jtpp.is-fullscreen.is-queue-open .jtpp-tracklist {
 		display: block;
-		grid-column: 2;
-		align-self: center;
-		max-height: 84vh;
-		padding: 8px;
+		max-height: min(84vh, 100%);
+		margin: 0;
+		border-block-end: 0;
 		overflow-y: auto;
-		border: 0;
-		border-radius: 12px;
-		background: color-mix(in srgb, Canvas 42%, transparent);
 	}
 }

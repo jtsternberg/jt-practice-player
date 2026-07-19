@@ -2154,6 +2154,59 @@
 		border-block-end: 0;
 		overflow-y: auto;
 	}
+
+	// Loop-edit mode adds the waveform, loop tools, and (with saved cues) a cue
+	// table, which can push the now-playing column taller than the viewport.
+	// The shell centers the panel with justify-content:center, so a too-tall
+	// panel would clip off BOTH ends (artwork top + exit chevron vanish above
+	// the viewport). Fix: cap the panel to the overlay height and let it scroll
+	// internally. The shell then only ever centers a panel that fits, so no
+	// clipping; when edit-mode content is short the capped panel is shorter
+	// than the shell and stays centered — identical to non-edit fullscreen.
+	.jtpp.is-fullscreen.is-loop-editing .jtpp-panel {
+		max-height: 100%;
+		overflow-y: auto;
+		// Top-align so overflowing content scrolls from the top (reachable)
+		// instead of center-clipping both ends. When content fits, the panel
+		// sizes to its content and the shell still centers it — so the common
+		// "fits" case stays visually centered, identical to non-edit.
+		justify-content: flex-start;
+	}
+
+	// Trim the artwork's vertical appetite while editing so the column usually
+	// fits without scrolling at all.
+	.jtpp.is-fullscreen.is-loop-editing .jtpp-artwork {
+		max-width: min(20vh, 200px);
+	}
+
+	// A long saved-cue list scrolls within its own capped box rather than
+	// ballooning the column height.
+	.jtpp.is-fullscreen.is-loop-editing .jtpp-loop-saved {
+		max-height: 22vh;
+		overflow-y: auto;
+	}
+
+	// The exit chevron lives inside the (now scrollable) panel; pin it to the
+	// overlay top-left so it stays reachable while the panel scrolls. The panel
+	// is position:static, so this anchors to the position:relative shell — and
+	// it stays inside the fullscreen container, so the focus trap still covers
+	// it.
+	.jtpp.is-fullscreen.is-loop-editing .jtpp-fs-close {
+		position: absolute;
+		z-index: 3;
+		top: 4px;
+		left: 4px;
+	}
+
+	// Suppress the queue-open panel shift while editing: the transform would
+	// make the panel the containing block for the absolutely-positioned exit
+	// chevron, letting it scroll away with the (now scrollable) panel. The
+	// drawer overlays the panel anyway, so shifting a scrolling edit-mode
+	// column adds no value — keeping transform:none leaves the chevron anchored
+	// to the untransformed shell in every state.
+	.jtpp.is-fullscreen.is-loop-editing.is-queue-open .jtpp-panel {
+		transform: none;
+	}
 }
 
 // =========================================================================

@@ -305,6 +305,8 @@ function render_player( array $tracks, array $options ): string {
 	<div class="jtpp-shell">
 	<?php endif; ?>
 	<?php if ( $options['playlist'] ) : ?>
+	<button type="button" class="jtpp-fs-queue" aria-expanded="false" aria-label="<?php esc_attr_e( 'Toggle queue', 'jt-practice-player' ); ?>"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg><span><?php esc_html_e( 'Queue', 'jt-practice-player' ); ?></span></button>
+	<div class="jtpp-queue">
 	<ol class="jtpp-tracklist">
 		<?php foreach ( $tracks as $i => $track ) : ?>
 		<li class="jtpp-track-row" data-index="<?php echo esc_attr( $i ); ?>">
@@ -321,20 +323,30 @@ function render_player( array $tracks, array $options ): string {
 		</li>
 		<?php endforeach; ?>
 	</ol>
+	</div>
 	<?php endif; ?>
 	<div class="jtpp-panel">
 		<div class="jtpp-artwork-glow" aria-hidden="true"></div>
+		<button type="button" class="jtpp-fs-close" aria-label="<?php esc_attr_e( 'Exit full screen', 'jt-practice-player' ); ?>"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></button>
 		<div class="jtpp-now-playing">
 			<img class="jtpp-artwork" alt="" hidden />
 			<div class="jtpp-now-copy">
 				<div class="jtpp-now-title"></div>
 				<div class="jtpp-now-meta"></div>
 			</div>
-		</div>
-		<div class="jtpp-loop-mode-bar">
-			<p class="jtpp-loop-help" hidden><?php esc_html_e( 'Drag to select a section. Tap to position the playhead.', 'jt-practice-player' ); ?></p>
-			<button type="button" class="jtpp-loop-edit"><?php esc_html_e( 'Set loop', 'jt-practice-player' ); ?></button>
-			<button type="button" class="jtpp-loop-edit-done" hidden><?php esc_html_e( 'Done', 'jt-practice-player' ); ?></button>
+			<div class="jtpp-loop-mode-bar">
+				<p class="jtpp-loop-help" hidden><?php esc_html_e( 'Drag to select a section. Tap to position the playhead.', 'jt-practice-player' ); ?></p>
+				<button type="button" class="jtpp-loop-edit"><?php esc_html_e( 'Set loop', 'jt-practice-player' ); ?></button>
+				<button type="button" class="jtpp-loop-edit-done" hidden><?php esc_html_e( 'Done', 'jt-practice-player' ); ?></button>
+			</div>
+			<div class="jtpp-more-wrap">
+				<button type="button" class="jtpp-more" aria-haspopup="menu" aria-expanded="false" aria-label="<?php esc_attr_e( 'More actions', 'jt-practice-player' ); ?>"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="5" cy="12" r="1.7"></circle><circle cx="12" cy="12" r="1.7"></circle><circle cx="19" cy="12" r="1.7"></circle></svg></button>
+				<div class="jtpp-more-menu" role="menu" hidden>
+					<button type="button" role="menuitem" class="jtpp-more-download"><?php esc_html_e( 'Download', 'jt-practice-player' ); ?></button>
+					<button type="button" role="menuitem" class="jtpp-more-share"><?php esc_html_e( 'Share', 'jt-practice-player' ); ?></button>
+					<button type="button" role="menuitem" class="jtpp-more-remove"><?php esc_html_e( 'Remove from queue', 'jt-practice-player' ); ?></button>
+				</div>
+			</div>
 		</div>
 		<div class="jtpp-timeline" role="slider" tabindex="0" aria-label="<?php esc_attr_e( 'Playback position', 'jt-practice-player' ); ?>" aria-valuemin="0" aria-valuenow="0">
 			<div class="jtpp-timeline-gradient"></div>

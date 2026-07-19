@@ -37,6 +37,35 @@ let activePlayer = null;
 let keyboardBound = false;
 let mediaSessionBound = false;
 let mediaSessionAdapter = null;
+
+// Body scroll lock for the fullscreen overlay-modal fallback. Ref-counted so
+// nested/concurrent players restore the page's original overflow correctly.
+let scrollLockCount = 0;
+let scrollLockPrev = null;
+
+function lockBodyScroll() {
+	if ( scrollLockCount === 0 ) {
+		scrollLockPrev = {
+			html: document.documentElement.style.overflow,
+			body: document.body.style.overflow,
+		};
+		document.documentElement.style.overflow = 'hidden';
+		document.body.style.overflow = 'hidden';
+	}
+	scrollLockCount += 1;
+}
+
+function unlockBodyScroll() {
+	if ( scrollLockCount === 0 ) {
+		return;
+	}
+	scrollLockCount -= 1;
+	if ( scrollLockCount === 0 && scrollLockPrev ) {
+		document.documentElement.style.overflow = scrollLockPrev.html;
+		document.body.style.overflow = scrollLockPrev.body;
+		scrollLockPrev = null;
+	}
+}
 const SAVE_DELAY = 1000;
 const REGION_COLOR = 'rgba(214, 137, 42, 0.24)';
 const WAVE_COLOR = '#9aa1aa';
@@ -56,10 +85,59 @@ const PEAK_CACHE_LIMIT = 12;
 const WAVEFORM_LOADING_DISMISS_DELAY = 1000;
 const PEAK_CACHE = new Map();
 const PEAK_PROMISES = new Map();
+
+// Shareable deep-link support. A URL like
+//   ?jtpp-track=<id|index>&jtpp-loop=<startSec>-<endSec>&jtpp-rate=<n>&jtpp-fs=1
+// boots the player into fullscreen on that track, applies the loop as an
+// active (unsaved) loop reconstructed entirely from the URL, and starts (or
+// arms) playback — so a section can be co-practiced from a shared link.
+// Consumed once per page load, by the first player that owns the track.
+let shareParamsConsumed = false;
+const SHARE_PARAM_TRACK = 'jtpp-track';
+const SHARE_PARAM_LOOP = 'jtpp-loop';
+const SHARE_PARAM_RATE = 'jtpp-rate';
+const SHARE_PARAM_FS = 'jtpp-fs';
+
+// Monotonic counter for generating unique queue-drawer ids (aria-controls
+// targets) when a page hosts more than one player.
+let JTPP_QUEUE_ID = 0;
+
+function roundShareTime( seconds ) {
+	return Math.round( seconds * 100 ) / 100;
+}
+
+function parseShareLoop( value ) {
+	if ( ! value ) {
+		return null;
+	}
+	const match = /^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/.exec( value.trim() );
+	if ( ! match ) {
+		return null;
+	}
+	const start = parseFloat( match[ 1 ] );
+	const end = parseFloat( match[ 2 ] );
+	if (
+		! Number.isFinite( start ) ||
+		! Number.isFinite( end ) ||
+		end <= start
+	) {
+		return null;
+	}
+	return { start, end };
+}
+
+function parseShareRate( value ) {
+	const rate = Number( value );
+	return Number.isFinite( rate ) && rate > 0.1 && rate <= 4 ? rate : null;
+}
 const PLAY_ICON =
 	'<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="7 5 19 12 7 19 7 5"></polygon></svg>';
 const PAUSE_ICON =
 	'<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5v14"></path><path d="M16 5v14"></path></svg>';
+// Trash icon for the saved-cue delete control, drawn to match the stroke
+// style of the transport icons above.
+const TRASH_ICON =
+	'<svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>';
 
 function bindGlobalKeyboard() {
 	if ( keyboardBound ) {
@@ -142,6 +220,7 @@ export class PracticePlayer {
 		this.storageTrackIds = this.tracks.map( ( track ) => track.id );
 		this.savedLoopsByTrack = loadSavedLoopsMap( this.storageTrackIds );
 		this.activeIndex = 0;
+		this.moreMenuOpen = false;
 		this.dragIndex = null;
 		this.loop = null;
 		this.region = null;
@@ -184,6 +263,7 @@ export class PracticePlayer {
 		PLAYERS.add( this );
 		activePlayer = activePlayer || this;
 		bindGlobalKeyboard();
+		this.applyShareParams();
 
 		document.addEventListener(
 			'visibilitychange',
@@ -267,6 +347,11 @@ export class PracticePlayer {
 		this.repeatButton = this.rootEl.querySelector( '.jtpp-repeat' );
 		this.randomButton = this.rootEl.querySelector( '.jtpp-random' );
 		this.fullscreenButton = this.rootEl.querySelector( '.jtpp-fullscreen' );
+		this.fsCloseButton = this.rootEl.querySelector( '.jtpp-fs-close' );
+		this.fsQueueButton = this.rootEl.querySelector( '.jtpp-fs-queue' );
+		this.moreWrap = this.rootEl.querySelector( '.jtpp-more-wrap' );
+		this.moreButton = this.rootEl.querySelector( '.jtpp-more' );
+		this.moreMenu = this.rootEl.querySelector( '.jtpp-more-menu' );
 		this.loopToolsEl = this.rootEl.querySelector( '.jtpp-loop-tools' );
 		this.loopCurrentEl = this.rootEl.querySelector( '.jtpp-loop-current' );
 		this.loopSavedEl = this.rootEl.querySelector( '.jtpp-loop-saved' );
@@ -305,6 +390,40 @@ export class PracticePlayer {
 		this.fullscreenButton?.addEventListener( 'click', () =>
 			this.toggleFullscreen()
 		);
+		// The in-overlay collapse chevron always exits fullscreen (native or
+		// modal); toggleFullscreen() detects the active mode and reverses it.
+		this.fsCloseButton?.addEventListener( 'click', () =>
+			this.toggleFullscreen()
+		);
+		// Desktop-fullscreen queue drawer toggle. Wire aria-controls to the
+		// track list (assign an id if it lacks one so multiple players stay
+		// unique). Toggling only flips a root class — playback is untouched.
+		if ( this.fsQueueButton && this.trackList ) {
+			if ( ! this.trackList.id ) {
+				JTPP_QUEUE_ID += 1;
+				this.trackList.id = `jtpp-queue-${ JTPP_QUEUE_ID }`;
+			}
+			this.fsQueueButton.setAttribute(
+				'aria-controls',
+				this.trackList.id
+			);
+			this.fsQueueButton.addEventListener( 'click', () =>
+				this.toggleQueue()
+			);
+		}
+		this.moreButton?.addEventListener( 'click', ( event ) => {
+			event.stopPropagation();
+			this.toggleMoreMenu();
+		} );
+		this.moreMenu
+			?.querySelector( '.jtpp-more-download' )
+			?.addEventListener( 'click', () => this.handleMoreDownload() );
+		this.moreMenu
+			?.querySelector( '.jtpp-more-share' )
+			?.addEventListener( 'click', () => this.handleMoreShare() );
+		this.moreMenu
+			?.querySelector( '.jtpp-more-remove' )
+			?.addEventListener( 'click', () => this.handleMoreRemove() );
 		this.loopClearButton?.addEventListener( 'click', () =>
 			this.clearLoopRegion()
 		);
@@ -1234,18 +1353,401 @@ export class PracticePlayer {
 	}
 
 	toggleFullscreen() {
-		if ( ! this.fullscreenButton || ! document.fullscreenEnabled ) {
+		if ( ! this.fullscreenButton ) {
 			return;
 		}
-		if ( document.fullscreenElement === this.rootEl ) {
-			document.exitFullscreen?.();
+		// Always use the CSS overlay modal — never native requestFullscreen.
+		// Native fullscreen renders inconsistently across browsers/OSes (and
+		// isn't reproducible in our tooling), so the class-driven overlay is the
+		// single consistent path shared by desktop and mobile. (a9y.15)
+		if ( this.fullscreenModal ) {
+			this.exitFullscreenModal();
 			return;
 		}
-		this.rootEl.requestFullscreen?.();
+		this.enterFullscreenModal();
+	}
+
+	// Desktop-fullscreen queue drawer: toggles a root class the SCSS keys off
+	// (only rendered at >=1024px in fullscreen). Never touches playback state.
+	toggleQueue() {
+		this.setQueueOpen(
+			! this.rootEl.classList.contains( 'is-queue-open' )
+		);
+	}
+
+	setQueueOpen( open ) {
+		this.rootEl.classList.toggle( 'is-queue-open', open );
+		this.fsQueueButton?.setAttribute(
+			'aria-expanded',
+			open ? 'true' : 'false'
+		);
+	}
+
+	// Class-driven fullscreen fallback: a fixed overlay that covers all site
+	// chrome, used where the native Fullscreen API can't fullscreen this
+	// element. Shares the .is-fullscreen styling with the native path.
+	enterFullscreenModal() {
+		if ( this.fullscreenModal ) {
+			return;
+		}
+		this.fullscreenModal = true;
+		const active = this.rootEl.ownerDocument.activeElement;
+		this.fullscreenReturnFocus =
+			active && typeof active.focus === 'function'
+				? active
+				: this.fullscreenButton;
+		this.rootEl.classList.add( 'is-fullscreen-modal' );
+		this.rootEl.setAttribute( 'role', 'dialog' );
+		this.rootEl.setAttribute( 'aria-modal', 'true' );
+		this.rootEl.setAttribute(
+			'aria-label',
+			'Practice player, full screen'
+		);
+		lockBodyScroll();
+		this.reflectFullscreen();
+		// Trap Tab within the overlay while it is open (native fullscreen traps
+		// focus itself, so this is only needed for the modal fallback).
+		this.focusTrapHandler = ( event ) => this.trapModalFocus( event );
+		this.rootEl.addEventListener( 'keydown', this.focusTrapHandler );
+		// Move focus to the visible exit chevron — the in-cluster fullscreen
+		// button is hidden in fullscreen — so keyboard + screen readers land
+		// inside the modal.
+		( this.fsCloseButton || this.rootEl ).focus?.();
+	}
+
+	// Keep Tab focus cycling inside the overlay modal (a9y.6). Only visible
+	// focusables participate, so the hidden tracklist / loop tools are skipped.
+	trapModalFocus( event ) {
+		if ( event.key !== 'Tab' || ! this.fullscreenModal ) {
+			return;
+		}
+		const focusable = Array.from(
+			this.rootEl.querySelectorAll(
+				'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+			)
+		).filter( ( el ) => el.offsetParent !== null );
+		if ( ! focusable.length ) {
+			return;
+		}
+		const first = focusable[ 0 ];
+		const last = focusable[ focusable.length - 1 ];
+		const activeEl = this.rootEl.ownerDocument.activeElement;
+		if ( event.shiftKey && activeEl === first ) {
+			event.preventDefault();
+			last.focus();
+		} else if ( ! event.shiftKey && activeEl === last ) {
+			event.preventDefault();
+			first.focus();
+		}
+	}
+
+	exitFullscreenModal() {
+		if ( ! this.fullscreenModal ) {
+			return;
+		}
+		this.fullscreenModal = false;
+		// Exiting fullscreen also closes/resets the queue drawer.
+		this.setQueueOpen( false );
+		this.rootEl.classList.remove( 'is-fullscreen-modal' );
+		this.rootEl.removeAttribute( 'role' );
+		this.rootEl.removeAttribute( 'aria-modal' );
+		this.rootEl.removeAttribute( 'aria-label' );
+		if ( this.focusTrapHandler ) {
+			this.rootEl.removeEventListener( 'keydown', this.focusTrapHandler );
+			this.focusTrapHandler = null;
+		}
+		unlockBodyScroll();
+		this.reflectFullscreen();
+		this.fullscreenReturnFocus?.focus?.();
+		this.fullscreenReturnFocus = null;
+	}
+
+	// Now-playing overflow menu (…): per-current-track Download / Share /
+	// Remove from queue. Accessible popup — Escape and click-outside close it,
+	// focus moves in on open and back to the trigger on close.
+	toggleMoreMenu() {
+		if ( this.moreMenuOpen ) {
+			this.closeMoreMenu();
+		} else {
+			this.openMoreMenu();
+		}
+	}
+
+	openMoreMenu() {
+		if ( ! this.moreMenu || this.moreMenuOpen ) {
+			return;
+		}
+		this.moreMenuOpen = true;
+		this.moreMenu.hidden = false;
+		this.moreButton?.setAttribute( 'aria-expanded', 'true' );
+		this.moreOutsideHandler = ( event ) => {
+			if ( ! this.moreWrap?.contains( event.target ) ) {
+				this.closeMoreMenu( false );
+			}
+		};
+		// Defer so the click that opened the menu doesn't immediately close it.
+		setTimeout(
+			() => document.addEventListener( 'click', this.moreOutsideHandler ),
+			0
+		);
+		this.moreMenu.querySelector( '[role="menuitem"]' )?.focus();
+	}
+
+	closeMoreMenu( returnFocus = true ) {
+		if ( ! this.moreMenu || ! this.moreMenuOpen ) {
+			return;
+		}
+		this.moreMenuOpen = false;
+		this.moreMenu.hidden = true;
+		this.moreButton?.setAttribute( 'aria-expanded', 'false' );
+		if ( this.moreOutsideHandler ) {
+			document.removeEventListener( 'click', this.moreOutsideHandler );
+			this.moreOutsideHandler = null;
+		}
+		if ( returnFocus ) {
+			this.moreButton?.focus();
+		}
+	}
+
+	handleMoreDownload() {
+		const track = this.currentTrack();
+		if ( track?.url ) {
+			const link = document.createElement( 'a' );
+			link.href = track.url;
+			link.download = '';
+			document.body.appendChild( link );
+			link.click();
+			link.remove();
+		}
+		this.closeMoreMenu();
+	}
+
+	handleMoreShare() {
+		const url = this.getShareUrl();
+		const item = this.moreMenu?.querySelector( '.jtpp-more-share' );
+		const flash = ( label ) => {
+			if ( ! item ) {
+				this.closeMoreMenu( false );
+				return;
+			}
+			if ( ! item.dataset.label ) {
+				item.dataset.label = item.textContent;
+			}
+			item.textContent = label;
+			setTimeout( () => {
+				item.textContent = item.dataset.label;
+				this.closeMoreMenu( false );
+			}, 1200 );
+		};
+		const copyToClipboard = () => {
+			if ( window.navigator.clipboard?.writeText ) {
+				window.navigator.clipboard
+					.writeText( url )
+					.then( () => flash( 'Link copied!' ) )
+					.catch( () => flash( 'Copy failed' ) );
+			} else {
+				flash( 'Copy unavailable' );
+			}
+		};
+		// Prefer the native share sheet on touch devices; on desktop (and as a
+		// fallback) copy the link to the clipboard, which is the reliable path.
+		const coarsePointer =
+			window.matchMedia &&
+			window.matchMedia( '(pointer: coarse)' ).matches;
+		if ( coarsePointer && window.navigator.share ) {
+			window.navigator
+				.share( { url } )
+				.then( () => this.closeMoreMenu( false ) )
+				.catch( () => copyToClipboard() );
+			return;
+		}
+		copyToClipboard();
+	}
+
+	handleMoreRemove() {
+		const track = this.currentTrack();
+		if ( ! track ) {
+			this.closeMoreMenu();
+			return;
+		}
+		const check = this.queueChecks.find(
+			( item ) => Number( item.dataset.index ) === this.activeIndex
+		);
+		if ( check ) {
+			check.checked = false;
+			this.checkedIds = this.queueChecks
+				.filter( ( item ) => item.checked )
+				.map(
+					( item ) => this.tracks[ Number( item.dataset.index ) ].id
+				);
+			saveQueue( this.storageTrackIds, this.checkedIds );
+		}
+		this.closeMoreMenu();
+		// Move off the just-removed track to the next queued one, keeping
+		// playback going if it was playing.
+		const wasPlaying = this.rootEl.classList.contains( 'is-playing' );
+		this.advance( 1, wasPlaying );
+	}
+
+	// Build a shareable deep link that reconstructs the current view: track,
+	// active loop (start/end), playback rate, and a fullscreen flag. Callable
+	// directly (e.g. from the console or a future Share menu, task a9y.9).
+	getShareUrl() {
+		const url = new URL( window.location.href );
+		url.search = '';
+		url.hash = '';
+		const params = url.searchParams;
+		const track = this.currentTrack();
+		if ( track ) {
+			params.set( SHARE_PARAM_TRACK, String( track.id ) );
+		}
+		if ( this.loop && this.loop.on && this.loop.start < this.loop.end ) {
+			params.set(
+				SHARE_PARAM_LOOP,
+				`${ roundShareTime( this.loop.start ) }-${ roundShareTime(
+					this.loop.end
+				) }`
+			);
+		}
+		const rate = Number( this.speedSelect?.value ) || 1;
+		if ( rate !== 1 ) {
+			params.set( SHARE_PARAM_RATE, String( rate ) );
+		}
+		params.set( SHARE_PARAM_FS, '1' );
+		return url.toString();
+	}
+
+	// Decode share params from the current URL and boot into the shared view.
+	// Runs once per page load, claimed by the first player that owns the
+	// referenced track. The URL loop overrides any saved state for that track.
+	applyShareParams() {
+		if ( shareParamsConsumed ) {
+			return;
+		}
+		const params = new URLSearchParams( window.location.search );
+		const trackParam = params.get( SHARE_PARAM_TRACK );
+		const loopParam = params.get( SHARE_PARAM_LOOP );
+		if ( trackParam === null && loopParam === null ) {
+			return;
+		}
+
+		let index = -1;
+		if ( trackParam !== null ) {
+			index = this.tracks.findIndex(
+				( track ) => String( track.id ) === trackParam
+			);
+			// Fall back to a numeric index when the id isn't found (e.g. a link
+			// shared before ids were stable, or a hand-built URL).
+			if ( index < 0 && /^\d+$/.test( trackParam ) ) {
+				const numeric = Number( trackParam );
+				if ( numeric >= 0 && numeric < this.tracks.length ) {
+					index = numeric;
+				}
+			}
+			// Track isn't in this player's list — let another player claim it.
+			if ( index < 0 ) {
+				return;
+			}
+		} else {
+			// Loop-only link applies to the current track.
+			index = this.activeIndex;
+		}
+
+		shareParamsConsumed = true;
+
+		const loop = parseShareLoop( loopParam );
+		const rate = parseShareRate( params.get( SHARE_PARAM_RATE ) );
+		const wantFullscreen = params.get( SHARE_PARAM_FS ) !== '0';
+
+		if ( index !== this.activeIndex ) {
+			this.loadTrack( index, false );
+		}
+
+		// The shared view is authoritative: suppress the per-track saved-state
+		// restore (which would otherwise seek to 0 / reset rate, or apply a
+		// locally saved loop) so the URL-derived state always wins. This is set
+		// synchronously — before the audio's loadedmetadata restore can fire.
+		this.trackStateRestored = true;
+
+		// Apply loop + rate + fullscreen immediately. Mobile browsers routinely
+		// refuse to preload metadata until a gesture, so gating this on
+		// loadedmetadata would strand the whole boot on exactly the devices we
+		// care about. Only the seek genuinely needs a known duration, so it is
+		// the one thing deferred (see seekWhenReady).
+		if ( loop ) {
+			this.loop = { start: loop.start, end: loop.end, on: true };
+			this.hydrateLoopRegion();
+			this.seekWhenReady( loop.start );
+			this.focusLoopZoom();
+		}
+		if ( rate ) {
+			this.applyRate( rate );
+		}
+		this.reflectLoopTools();
+		this.updateTimes();
+		this.requestStickyUpdate();
+		if ( wantFullscreen ) {
+			this.enterFullscreenModal();
+		}
+		this.armSharedPlayback();
+	}
+
+	// Seek to a target time as soon as the media duration is known. Setting
+	// currentTime before metadata is unreliable, so defer to loadedmetadata
+	// when the element hasn't loaded yet (e.g. before the first gesture-driven
+	// play on mobile). The active loop keeps playback in range thereafter.
+	seekWhenReady( time ) {
+		const audio = this.nativeAudio;
+		const doSeek = () => {
+			if ( this.nativeAudio !== audio || ! this.transport ) {
+				return;
+			}
+			const { duration } = this.transport.snapshot();
+			this.transport.seekTo(
+				duration ? clampSeek( time, duration ) : time
+			);
+			this.updateTimes();
+		};
+		if ( audio && audio.readyState >= 1 ) {
+			doSeek();
+		} else {
+			audio?.addEventListener( 'loadedmetadata', doSeek, { once: true } );
+		}
+	}
+
+	// Autoplay of audible media is blocked without a user gesture. Try to
+	// play; if the browser refuses, surface a clear "tap to start" affordance
+	// (CSS class + fullscreen hint) and start on the first interaction rather
+	// than failing silently.
+	armSharedPlayback() {
+		const result = this.transport?.play();
+		if ( result && typeof result.then === 'function' ) {
+			result.catch( () => this.awaitGestureToPlay() );
+		} else {
+			this.awaitGestureToPlay();
+		}
+	}
+
+	awaitGestureToPlay() {
+		if ( this.pendingGesturePlay ) {
+			return;
+		}
+		this.pendingGesturePlay = true;
+		this.rootEl.classList.add( 'is-awaiting-gesture' );
+		const start = () => {
+			document.removeEventListener( 'pointerdown', start, true );
+			document.removeEventListener( 'keydown', start, true );
+			this.pendingGesturePlay = false;
+			this.rootEl.classList.remove( 'is-awaiting-gesture' );
+			this.play();
+		};
+		document.addEventListener( 'pointerdown', start, true );
+		document.addEventListener( 'keydown', start, true );
 	}
 
 	reflectFullscreen() {
-		const active = document.fullscreenElement === this.rootEl;
+		const active =
+			document.fullscreenElement === this.rootEl || this.fullscreenModal;
 		this.rootEl.classList.toggle( 'is-fullscreen', active );
 		this.fullscreenButton?.setAttribute(
 			'aria-pressed',
@@ -1685,7 +2187,7 @@ export class PracticePlayer {
 				deleteButton.type = 'button';
 				deleteButton.className = 'jtpp-loop-cue-delete';
 				deleteButton.dataset.loopId = loop.id;
-				deleteButton.textContent = 'Delete';
+				deleteButton.innerHTML = TRASH_ICON;
 				deleteButton.setAttribute(
 					'aria-label',
 					`Delete cue ${ loop.name }`
@@ -1858,9 +2360,17 @@ export class PracticePlayer {
 				'--jtpp-artwork-glow',
 				`url("${ safeUrl }")`
 			);
+			// Also expose the URL on the root so the fullscreen full-bleed
+			// background (a9y.14) can paint it behind the whole overlay, not
+			// just inside the panel.
+			this.rootEl?.style.setProperty(
+				'--jtpp-artwork-glow',
+				`url("${ safeUrl }")`
+			);
 			this.panelEl.classList.add( 'has-artwork-glow' );
 		} else {
 			this.artworkGlowEl.style.removeProperty( '--jtpp-artwork-glow' );
+			this.rootEl?.style.removeProperty( '--jtpp-artwork-glow' );
 			this.panelEl.classList.remove( 'has-artwork-glow' );
 		}
 	}
@@ -1922,9 +2432,15 @@ export class PracticePlayer {
 			MediaTrackNext: () => this.advance( 1, true ),
 		};
 		// Escape exits loop edit mode only while it is active, so it stays out
-		// of the way of native Escape behavior (e.g. exiting fullscreen).
-		if ( this.loopEditing ) {
+		// of the way of native Escape behavior (e.g. exiting fullscreen). When
+		// not editing a loop, Escape closes the overlay-modal fallback (native
+		// fullscreen handles its own Escape via the browser).
+		if ( this.moreMenuOpen ) {
+			handlers.Escape = () => this.closeMoreMenu();
+		} else if ( this.loopEditing ) {
 			handlers.Escape = () => this.exitLoopEditMode();
+		} else if ( this.fullscreenModal ) {
+			handlers.Escape = () => this.exitFullscreenModal();
 		}
 		const handler = handlers[ event.key ];
 		if ( handler ) {

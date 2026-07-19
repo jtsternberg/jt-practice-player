@@ -48,6 +48,47 @@
 	color: CanvasText;
 }
 
+// Fullscreen fallback for platforms where the native Fullscreen API can't
+// fullscreen this element (notably iOS Safari, which only fullscreens
+// <video>). JS adds .is-fullscreen-modal (alongside .is-fullscreen) and locks
+// body scroll; this fixed overlay covers all site chrome. It shares the
+// .is-fullscreen layout rules with the native path.
+.jtpp.is-fullscreen-modal {
+	position: fixed;
+	inset: 0;
+	// Zero any block-wrapper margin — a fixed element still honors margins, so
+	// a theme's top margin would leave a gap where site chrome peeks through.
+	margin: 0;
+	z-index: 2147483000;
+	overflow: auto;
+	-webkit-overflow-scrolling: touch;
+	// Keep content clear of the notch and home indicator on iPhone.
+	padding:
+		max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+		max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+	background: Canvas;
+	color: CanvasText;
+	animation: jtpp-fs-in 200ms ease;
+}
+
+@keyframes jtpp-fs-in {
+
+	from {
+		opacity: 0;
+	}
+
+	to {
+		opacity: 1;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+	.jtpp.is-fullscreen-modal {
+		animation: none;
+	}
+}
+
 .jtpp-shell {
 	position: relative;
 	display: grid;
@@ -59,14 +100,34 @@
 	box-shadow: 0 1px 0 color-mix(in srgb, currentcolor 5%, transparent);
 }
 
+// Fullscreen = a Spotify-style "now playing" screen: a flex column that fills
+// the overlay so nothing scrolls. The tracklist is hidden; only the artwork
+// region flexes, giving up height when loop-edit tools appear (a9y.5).
 .jtpp:fullscreen .jtpp-shell,
 .jtpp.is-fullscreen .jtpp-shell {
-	width: min(100%, 1100px);
-	min-height: calc(100vh - 48px);
+	display: flex;
+	flex-direction: column;
+	width: min(100%, 720px);
+	height: 100%;
+	min-height: 0;
 	margin: 0 auto;
-	background:
-		linear-gradient(180deg, color-mix(in srgb, currentcolor 3%, transparent), transparent 54px),
-		Canvas;
+	padding: 0;
+	border: 0;
+	background: none;
+	box-shadow: none;
+}
+
+.jtpp:fullscreen .jtpp-shell {
+	height: auto;
+	min-height: 100vh;
+}
+
+
+// Transparent wrapper: the queue <ol> behaves as a direct shell grid item
+// normally (display:contents removes this box). It only becomes a real box —
+// the right-side drawer — in desktop fullscreen with the queue open.
+.jtpp-queue {
+	display: contents;
 }
 
 .jtpp-tracklist {
@@ -281,7 +342,7 @@
 .jtpp-panel {
 	position: relative;
 	display: grid;
-	gap: 13px;
+	gap: 9px;
 	padding: 14px;
 	border: 1px solid var(--jtpp-hairline);
 	border-radius: 8px;
@@ -385,6 +446,13 @@
 }
 
 .jtpp-now-playing {
+	position: relative;
+	// Lift the whole now-playing row (which hosts the overflow menu) above the
+	// later panel siblings — esp. .jtpp-controls (z-index:1) — so the open …
+	// menu, which overflows downward, paints over the transport row. !important
+	// defeats a higher-specificity stacking rule that otherwise pins this row
+	// below the controls (verified on the BreakFree theme).
+	z-index: 2 !important;
 	display: flex;
 	align-items: center;
 	gap: 13px;
@@ -393,9 +461,9 @@
 }
 
 .jtpp-artwork {
-	width: 84px;
-	height: 84px;
-	flex: 0 0 84px;
+	width: 62px;
+	height: 62px;
+	flex: 0 0 62px;
 	border-radius: 10px;
 	object-fit: cover;
 	// Soft drop shadow lifts the artwork off the ambient wash; a 1px hairline
@@ -482,7 +550,7 @@
 	--jtpp-progress: 0;
 
 	position: relative;
-	height: 40px;
+	height: 30px;
 	cursor: pointer;
 	touch-action: none;
 }
@@ -735,7 +803,7 @@
 	text-transform: uppercase;
 }
 
-.jtpp-loop-clear {
+.jtpp .jtpp-loop-clear {
 	display: inline-flex;
 	width: 24px;
 	height: 24px;
@@ -809,11 +877,10 @@
 	margin-inline-start: auto;
 }
 
-.jtpp-loop-save,
-.jtpp-loop-save-confirm,
-.jtpp-loop-save-cancel,
-.jtpp-loop-cue-restore,
-.jtpp-loop-cue-delete {
+.jtpp .jtpp-loop-save,
+.jtpp .jtpp-loop-save-confirm,
+.jtpp .jtpp-loop-save-cancel,
+.jtpp .jtpp-loop-cue-restore {
 	padding: 4px 12px;
 	border: 1px solid color-mix(in srgb, var(--jtpp-loop) 44%, transparent);
 	border-radius: 999px;
@@ -831,38 +898,35 @@
 		color 140ms ease;
 }
 
-.jtpp-loop-save,
-.jtpp-loop-save-confirm,
-.jtpp-loop-cue-restore {
+.jtpp .jtpp-loop-save,
+.jtpp .jtpp-loop-save-confirm,
+.jtpp .jtpp-loop-cue-restore {
 	color: color-mix(in srgb, currentcolor 86%, #000);
 	background: color-mix(in srgb, var(--jtpp-loop) 13%, transparent);
 }
 
-.jtpp-loop-clear:hover,
-.jtpp-loop-clear:focus-visible,
-.jtpp-loop-save:hover,
-.jtpp-loop-save:focus-visible,
-.jtpp-loop-save-confirm:hover,
-.jtpp-loop-save-confirm:focus-visible,
-.jtpp-loop-cue-restore:hover,
-.jtpp-loop-cue-restore:focus-visible {
+.jtpp .jtpp-loop-clear:hover,
+.jtpp .jtpp-loop-clear:focus-visible,
+.jtpp .jtpp-loop-save:hover,
+.jtpp .jtpp-loop-save:focus-visible,
+.jtpp .jtpp-loop-save-confirm:hover,
+.jtpp .jtpp-loop-save-confirm:focus-visible,
+.jtpp .jtpp-loop-cue-restore:hover,
+.jtpp .jtpp-loop-cue-restore:focus-visible {
 	color: color-mix(in srgb, currentcolor 92%, #000);
 	border-color: var(--jtpp-loop);
 	background: color-mix(in srgb, var(--jtpp-loop) 16%, transparent);
 	outline: none;
 }
 
-.jtpp-loop-save-cancel,
-.jtpp-loop-cue-delete {
+.jtpp .jtpp-loop-save-cancel {
 	border-color: var(--jtpp-line);
 	color: var(--jtpp-muted);
 	background: transparent;
 }
 
-.jtpp-loop-save-cancel:hover,
-.jtpp-loop-save-cancel:focus-visible,
-.jtpp-loop-cue-delete:hover,
-.jtpp-loop-cue-delete:focus-visible {
+.jtpp .jtpp-loop-save-cancel:hover,
+.jtpp .jtpp-loop-save-cancel:focus-visible {
 	color: color-mix(in srgb, currentcolor 92%, #000);
 	border-color: var(--jtpp-line);
 	background: color-mix(in srgb, currentcolor 5%, transparent);
@@ -1483,7 +1547,7 @@
 	}
 
 	.jtpp-loop-summary,
-	.jtpp-loop-save,
+	.jtpp .jtpp-loop-save,
 	.jtpp-zoom-controls {
 		justify-content: center;
 	}
@@ -1534,9 +1598,625 @@
 		grid-column: 1 / -1;
 	}
 
-	.jtpp-loop-cue-restore,
-	.jtpp-loop-cue-delete {
+	.jtpp .jtpp-loop-cue-restore,
+	.jtpp .jtpp-loop-cue-delete {
 		justify-content: center;
 		text-align: center;
 	}
+}
+
+// Shared deep-link autoplay fallback (task a9y.10): when the browser blocks
+// autoplay on a shared link, we can't play until the visitor interacts. Draw
+// attention to the play control with a gentle pulse and, in fullscreen, a
+// "Tap to start" hint, so playback armed-but-waiting never looks broken.
+.jtpp.is-awaiting-gesture .jtpp-play {
+	animation: jtpp-awaiting-pulse 1.4s ease-in-out infinite;
+}
+
+.jtpp.is-awaiting-gesture.is-fullscreen .jtpp-controls::after {
+	display: block;
+	width: 100%;
+	margin-top: 8px;
+	color: var(--jtpp-muted);
+	font-size: 13px;
+	text-align: center;
+	content: "Tap to start";
+}
+
+@keyframes jtpp-awaiting-pulse {
+
+	0%,
+	100% {
+		box-shadow: 0 0 0 0 color-mix(in srgb, var(--jtpp-accent) 55%, transparent);
+	}
+
+	50% {
+		box-shadow: 0 0 0 8px color-mix(in srgb, var(--jtpp-accent) 0%, transparent);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+	.jtpp.is-awaiting-gesture .jtpp-play {
+		animation: none;
+	}
+}
+
+// =========================================================================
+// Set-loop button on the now-playing title line (all tiers).
+// In loop-edit mode the bar reflows full-width so the help text + Done have
+// room — visually back to its pre-move position below now-playing.
+// =========================================================================
+.jtpp-now-playing .jtpp-now-copy {
+	flex: 1 1 auto;
+}
+
+.jtpp-now-playing .jtpp-loop-mode-bar {
+	flex: 0 0 auto;
+	margin: 0;
+}
+
+.jtpp.is-loop-editing .jtpp-now-playing {
+	flex-wrap: wrap;
+}
+
+.jtpp.is-loop-editing .jtpp-now-playing .jtpp-loop-mode-bar {
+	flex-basis: 100%;
+	margin-top: 6px;
+}
+
+// Saved-cue delete: icon-only trash button matching the stroke icon set.
+.jtpp .jtpp-loop-cue-delete {
+	display: inline-flex;
+	width: 34px;
+	height: 34px;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	border: 0;
+	border-radius: 8px;
+	color: var(--jtpp-muted);
+	background: transparent;
+	box-shadow: none;
+	cursor: pointer;
+	transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.jtpp .jtpp-loop-cue-delete:hover,
+.jtpp .jtpp-loop-cue-delete:focus-visible {
+	color: var(--jtpp-accent);
+	background: var(--jtpp-active);
+	outline: none;
+}
+
+// =========================================================================
+// Responsive scale ramp (jt-practice-player-a9y.1/.2)
+//   Baseline (x-large): current desktop sizing — untouched.
+//   COMPACT  (<=1199px): tighter controls/artwork, sentence-case titles.
+//   TIGHT    (<=599px):  mobile density; control buttons stay COMPACT-sized.
+// =========================================================================
+@media (max-width: 1199px) {
+
+	// Drop the theme-injected ALL-CAPS for a cleaner, Spotify-like read.
+	.jtpp .jtpp-track-title {
+		text-transform: none;
+		letter-spacing: 0.4px;
+	}
+
+	.jtpp .jtpp-track-artist {
+		text-transform: none;
+		letter-spacing: 0;
+	}
+
+	.jtpp .jtpp-controls {
+		gap: 6px;
+	}
+
+	.jtpp .jtpp-controls > button {
+		width: 34px;
+		height: 34px;
+	}
+
+	.jtpp .jtpp-controls > button svg {
+		width: 17px;
+		height: 17px;
+	}
+
+	.jtpp .jtpp-controls .jtpp-play {
+		width: 44px;
+		height: 44px;
+	}
+
+	.jtpp .jtpp-controls .jtpp-play svg {
+		width: 20px;
+		height: 20px;
+	}
+
+	.jtpp-speed {
+		min-width: 54px;
+		height: 34px;
+		padding: 0 20px 0 10px !important;
+		font-size: 12px;
+	}
+
+	.jtpp-artwork {
+		width: 52px;
+		height: 52px;
+		flex-basis: 52px;
+	}
+
+	.jtpp-now-title {
+		font-size: 16px;
+	}
+
+	.jtpp-now-meta {
+		font-size: 12.5px;
+	}
+
+	.jtpp-panel {
+		gap: 9px;
+	}
+}
+
+@media (max-width: 599px) {
+
+	.jtpp-panel {
+		gap: 7px;
+		padding: 10px;
+	}
+
+	.jtpp-artwork {
+		width: 44px;
+		height: 44px;
+		flex-basis: 44px;
+	}
+
+	.jtpp-now-title {
+		font-size: 15px;
+	}
+
+	.jtpp-now-meta {
+		font-size: 11.5px;
+	}
+
+	// JT: remove residual track-row vertical padding on mobile.
+	.jtpp .jtpp-track {
+		padding-top: 0;
+		padding-bottom: 0;
+	}
+
+	.jtpp-track-row {
+		min-height: 38px;
+	}
+
+	.jtpp .jtpp-track-title {
+		font-size: 13px;
+		font-weight: 600;
+		letter-spacing: 0.2px;
+	}
+
+	.jtpp .jtpp-track-artist {
+		margin-top: 1px;
+		font-size: 11px;
+	}
+
+	.jtpp-times {
+		font-size: 10.5px;
+	}
+
+	.jtpp .jtpp-controls {
+		gap: 5px;
+	}
+}
+
+// === Fullscreen now-playing layout (a9y.5) — placed after base rules to
+// satisfy no-descending-specificity. Shares .is-fullscreen (native + modal).
+.jtpp.is-fullscreen .jtpp-tracklist {
+	display: none;
+}
+
+// The panel becomes the column body and fills remaining height. Crucially it
+// must cancel the docked sticky-player's `position:fixed` (from
+// .is-player-stuck, which stays set while scrolled) — otherwise the panel
+// breaks out of the fullscreen layout to full width and hits the playlist.
+.jtpp.is-fullscreen .jtpp-panel {
+	display: flex;
+	position: static;
+	inset: auto;
+	z-index: auto;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: 12px;
+	width: auto;
+	min-height: 0;
+	padding: 0;
+	background: none;
+	border: 0;
+	box-shadow: none;
+}
+
+// Cancel the docked sticky-player's peek-gradient bar in fullscreen.
+.jtpp.is-fullscreen .jtpp-panel::before {
+	content: none;
+}
+
+// Collapse chevron: hidden inline, top-left in fullscreen; the sole exit.
+.jtpp-fs-close {
+	display: none;
+}
+
+// Queue toggle pill: hidden everywhere except desktop (>=1024px) fullscreen,
+// where the >=1024 block below reveals and positions it top-right.
+.jtpp-fs-queue {
+	display: none;
+}
+
+.jtpp.is-fullscreen .jtpp-fs-close {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-self: flex-start;
+	align-items: center;
+	justify-content: center;
+	width: 40px;
+	height: 40px;
+	padding: 0;
+	border: 0;
+	border-radius: 999px;
+	color: inherit;
+	background: transparent;
+	box-shadow: none;
+	cursor: pointer;
+	transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.jtpp.is-fullscreen .jtpp-fs-close:hover,
+.jtpp.is-fullscreen .jtpp-fs-close:focus-visible {
+	color: var(--jtpp-accent);
+	background: var(--jtpp-active);
+	outline: none;
+}
+
+// The in-cluster fullscreen button is redundant once open — chevron exits.
+.jtpp.is-fullscreen .jtpp-fullscreen {
+	display: none;
+}
+
+// Now-playing stacks vertically and is the flexible region: the artwork
+// shrinks (min-height:0) so the whole screen fits without scrolling.
+.jtpp.is-fullscreen .jtpp-now-playing {
+	flex: 1 1 auto;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 16px;
+	min-height: 0;
+	text-align: center;
+}
+
+.jtpp.is-fullscreen .jtpp-artwork {
+	flex: 0 1 auto;
+	width: auto;
+	height: auto;
+	max-width: min(56vw, 60vh, 360px);
+	max-height: 100%;
+	margin: 0 auto;
+	aspect-ratio: 1 / 1;
+}
+
+.jtpp.is-fullscreen .jtpp-now-copy {
+	flex: 0 0 auto;
+}
+
+.jtpp.is-fullscreen .jtpp-now-title {
+	font-size: 1.5rem;
+}
+
+.jtpp.is-fullscreen .jtpp-now-meta {
+	font-size: 1rem;
+}
+
+// Keep Set-loop / help centered under the title (not pinned right) here.
+.jtpp.is-fullscreen .jtpp-now-playing .jtpp-loop-mode-bar {
+	justify-content: center;
+	margin: 0;
+}
+
+// Scrubber, times, waveform, loop tools and controls hold their natural
+// height; the flexing artwork absorbs the difference.
+.jtpp.is-fullscreen .jtpp-timeline,
+.jtpp.is-fullscreen .jtpp-times,
+.jtpp.is-fullscreen .jtpp-waveform,
+.jtpp.is-fullscreen .jtpp-loop-tools,
+.jtpp.is-fullscreen .jtpp-controls {
+	flex: 0 0 auto;
+}
+
+// In fullscreen the now-playing column must NOT adopt the docked loop-edit
+// reflow (flex-wrap:wrap + full-basis bar), which would wrap children into
+// side-by-side columns and shove the help text off-screen. Keep the column.
+.jtpp.is-fullscreen.is-loop-editing .jtpp-now-playing {
+	flex-wrap: nowrap;
+}
+
+.jtpp.is-fullscreen.is-loop-editing .jtpp-now-playing .jtpp-loop-mode-bar {
+	flex: 0 0 auto;
+	flex-basis: auto;
+	margin: 0;
+}
+
+// Give the waveform a workable height in fullscreen loop-edit; the artwork
+// (flex:0 1 auto) yields the space so the screen still fits.
+.jtpp.is-fullscreen .jtpp-waveform:not([hidden]) {
+	min-height: 96px;
+}
+
+// Blurred current-artwork fills the WHOLE overlay at every size, so the
+// background reaches all edges — no flat-dark frame around the content on
+// mobile. --jtpp-artwork-glow is set on the root by updateArtworkGlow().
+.jtpp.is-fullscreen::before {
+	position: fixed;
+	z-index: 0;
+	inset: 0;
+	background-image: var(--jtpp-artwork-glow, none);
+	background-repeat: no-repeat;
+	background-position: center;
+	background-size: cover;
+	transform: scale(1.15);
+	filter: blur(64px) saturate(1.5);
+	content: "";
+	pointer-events: none;
+}
+
+// Scrim over the wash keeps text at AA contrast, light + dark.
+.jtpp.is-fullscreen::after {
+	position: fixed;
+	z-index: 0;
+	inset: 0;
+	background: color-mix(in srgb, Canvas 64%, transparent);
+	content: "";
+	pointer-events: none;
+}
+
+// Content rides above the wash. Also cancel the stuck-player's bottom padding
+// (reserved for the fixed docked panel, which fullscreen makes static again).
+.jtpp.is-fullscreen .jtpp-shell {
+	position: relative;
+	z-index: 1;
+	padding-bottom: 0;
+}
+
+// The panel-level card wash is redundant behind the full-overlay fill.
+.jtpp.is-fullscreen .jtpp-artwork-glow {
+	display: none;
+}
+
+// Wide screens (desktop / tablet landscape): the full-height flex column
+// looks sparse — a skinny stretched column with big vertical gaps and black
+// side voids. Instead center the now-playing content as a cohesive card and
+// stop the artwork region from ballooning. Mobile keeps the fit-to-viewport
+// flex behavior below this breakpoint (a9y.13).
+@media (min-width: 700px) {
+
+	.jtpp.is-fullscreen .jtpp-shell {
+		justify-content: center;
+		width: min(100%, 560px);
+	}
+
+	.jtpp.is-fullscreen .jtpp-panel {
+		flex: 0 1 auto;
+		justify-content: center;
+		gap: 18px;
+	}
+
+	.jtpp.is-fullscreen .jtpp-now-playing {
+		flex: 0 0 auto;
+	}
+
+	.jtpp.is-fullscreen .jtpp-artwork {
+		max-width: min(340px, 40vh);
+	}
+}
+
+// =========================================================================
+// Now-playing overflow (…) menu (task a9y.9): per-current-track
+// Download / Share / Remove from queue. Sits beside Set loop on the
+// now-playing header, on all tiers.
+// =========================================================================
+.jtpp-more-wrap {
+	position: relative;
+	flex: 0 0 auto;
+}
+
+.jtpp .jtpp-more {
+	display: inline-flex;
+	width: 32px;
+	height: 32px;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	border: 0;
+	border-radius: 999px;
+	color: var(--jtpp-muted);
+	background: transparent;
+	box-shadow: none;
+	cursor: pointer;
+	transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.jtpp .jtpp-more:hover,
+.jtpp .jtpp-more:focus-visible {
+	color: var(--jtpp-accent);
+	background: var(--jtpp-active);
+	outline: none;
+}
+
+.jtpp-more-menu {
+	position: absolute;
+	top: calc(100% + 6px);
+	right: 0;
+	z-index: 30;
+	min-width: 190px;
+	padding: 6px;
+	border: 1px solid var(--jtpp-line);
+	border-radius: 10px;
+	background: color-mix(in srgb, CanvasText 7%, Canvas);
+	box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.jtpp-more-menu[hidden] {
+	display: none;
+}
+
+.jtpp .jtpp-more-menu button[role="menuitem"] {
+	display: block;
+	width: 100%;
+	padding: 9px 10px;
+	border: 0;
+	border-radius: 6px;
+	color: inherit;
+	background: transparent;
+	box-shadow: none;
+	font: inherit;
+	font-size: 0.9rem;
+	font-weight: 500;
+	letter-spacing: 0;
+	text-align: left;
+	text-transform: none;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.jtpp .jtpp-more-menu button[role="menuitem"]:hover,
+.jtpp .jtpp-more-menu button[role="menuitem"]:focus-visible {
+	color: var(--jtpp-accent);
+	background: var(--jtpp-active);
+	outline: none;
+}
+
+// Keep loop-edit mode uncluttered — the overflow menu is hidden while editing.
+.jtpp.is-loop-editing .jtpp-more-wrap {
+	display: none;
+}
+
+// =========================================================================
+// Wide-screen fullscreen (Focus): one large centered now-playing column with
+// the queue hidden behind a top-right toggle. Gated to >=1024px so mobile and
+// the 700–1023 card layout stay untouched. Opening the queue slides in a
+// right-side overlay drawer and nudges the now-playing column left.
+// =========================================================================
+@media (min-width: 1024px) {
+
+	// Shell spans the full overlay so the drawer can pin to the viewport edge;
+	// the now-playing panel is centered within it as a single column. Shell is
+	// position:relative (set in the base fullscreen block), so the absolutely
+	// positioned drawer and toggle anchor to it.
+	.jtpp.is-fullscreen .jtpp-shell {
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		max-width: none;
+	}
+
+	// Now-playing = one centered column. It shifts left when the drawer opens.
+	.jtpp.is-fullscreen .jtpp-panel {
+		flex: 0 1 auto;
+		justify-content: center;
+		width: min(92vw, 640px);
+		transition: transform 0.25s ease;
+	}
+
+	.jtpp.is-fullscreen .jtpp-artwork {
+		max-width: min(44vh, 400px);
+	}
+
+	// Queue toggle pill, top-right of the overlay. Sits inside the fullscreen
+	// container so the focus trap covers it; stays put while the panel shifts.
+	.jtpp.is-fullscreen .jtpp-fs-queue {
+		display: inline-flex;
+		position: absolute;
+		z-index: 3;
+		top: 4px;
+		right: 4px;
+		align-items: center;
+		gap: 8px;
+		height: 40px;
+		padding: 0 16px;
+		border: 1px solid color-mix(in srgb, CanvasText 22%, transparent);
+		border-radius: 999px;
+		color: CanvasText;
+		background: color-mix(in srgb, #08070688 60%, transparent);
+		font: inherit;
+		font-size: 0.9rem;
+		font-weight: 500;
+		line-height: 1;
+		cursor: pointer;
+		transition: color 0.15s ease, background-color 0.15s ease;
+	}
+
+	.jtpp.is-fullscreen .jtpp-fs-queue:hover,
+	.jtpp.is-fullscreen .jtpp-fs-queue:focus-visible {
+		color: var(--jtpp-accent);
+		background: color-mix(in srgb, CanvasText 14%, transparent);
+		outline: none;
+	}
+
+	// Drawer open: nudge the centered column left by half the drawer width so
+	// it stays visually balanced against the incoming panel.
+	.jtpp.is-fullscreen.is-queue-open .jtpp-panel {
+		transform: translateX(calc(min(380px, 32vw) / -2));
+	}
+
+	// The wrapper becomes the drawer box: a full-height right-side overlay that
+	// vertically centers its (height-capped) track list.
+	.jtpp.is-fullscreen.is-queue-open .jtpp-queue {
+		display: flex;
+		position: absolute;
+		z-index: 2;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		flex-direction: column;
+		justify-content: center;
+		width: min(380px, 32vw);
+		padding: 9vh 24px 6vh;
+		background: linear-gradient(270deg, rgba(8, 7, 6, 0.72) 70%, transparent);
+	}
+
+	// The track list scrolls internally, capped so it never overflows the
+	// viewport or pins off the top: the drawer centers this capped box, while
+	// the list itself uses normal top-to-bottom flow for its overflow. Handles
+	// very long playlists (50+ tracks).
+	// display:block (not grid): each row is a self-contained grid sized to its
+	// own content in normal flow. As a grid, the list's auto row tracks take
+	// their base size from the row's explicit min-height:56px and — because a
+	// height-capped scroll container has no positive free space — never grow to
+	// fit a wrapped (multi-line) title, so overflowing text paints over the
+	// next row. Block flow removes the shared row-track budget entirely.
+	.jtpp.is-fullscreen.is-queue-open .jtpp-tracklist {
+		display: block;
+		max-height: min(84vh, 100%);
+		margin: 0;
+		border-block-end: 0;
+		overflow-y: auto;
+	}
+}
+
+// =========================================================================
+// Loop tools outside edit mode: the "Save cue" button and the selection-zoom
+// controls (− / Fit loop / +) only make sense while editing a loop, so gate
+// them to .is-loop-editing. Outside edit mode only the loop summary chip
+// (LOOP / range / × clear) remains. Placed after all loop-tools rules on
+// every tier so higher-specificity gating never descends (no-descending-
+// specificity) and applies across docked (baseline/compact/tight) + fullscreen.
+// =========================================================================
+.jtpp:not(.is-loop-editing) .jtpp-loop-save,
+.jtpp:not(.is-loop-editing) .jtpp-zoom-controls {
+	display: none;
+}
+
+// With the two edit-only items gone, keep the lone summary chip centered on
+// tiers that stretch the row while editing (compact/tight override the base
+// centering to justify-content:stretch).
+.jtpp:not(.is-loop-editing) .jtpp-loop-current {
+	justify-content: center;
 }

@@ -1064,6 +1064,20 @@ export class PracticePlayer {
 	}
 
 	onRegionRemoved( region ) {
+		// Ignore removals that are part of an internal region *replacement*
+		// (restoreSavedLoop / hydrateLoopRegion): those arm this.loop first,
+		// then swap the visual region via region.remove() + addRegion(). But
+		// WaveSurfer fires 'region-removed' synchronously inside remove(), so
+		// without this guard we null the just-armed loop mid-restore — and the
+		// replacement addRegion() runs under this.restoring, so onRegionCreated
+		// takes its restore branch and never re-arms it. Net result: this.loop
+		// ends up null, seekLoopStart() no-ops, and the loop silently stops
+		// enforcing (the "region moves but never loops / never seeks" bug).
+		// A genuine user clear (× button, double-click delete) is not restoring,
+		// so it still falls through and disarms the loop as intended.
+		if ( this.restoring ) {
+			return;
+		}
 		if ( this.region !== region ) {
 			return;
 		}

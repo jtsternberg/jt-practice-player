@@ -1171,9 +1171,11 @@
 // The `.jtpp` prefix + !important beat a theme's `input[type="range"] { width:
 // 100% }`, which otherwise blows the volume up to the full control-row width.
 .jtpp .jtpp-volume {
-	display: none;
-	// Compact, never stretches to fill the control row, and dimmed until
-	// touched so it recedes next to the primary transport (Spotify-style).
+	// Compact enough to stay visible at every width now (it used to be hidden
+	// below 600px because it rendered as a full-width bar).
+	display: inline-block;
+	// Never stretches to fill the control row, and dimmed until touched so it
+	// recedes next to the primary transport (Spotify-style).
 	flex: 0 0 auto;
 	width: 84px !important;
 	accent-color: var(--jtpp-accent);
@@ -1846,12 +1848,6 @@
 	background: color-mix(in srgb, var(--wp-admin-theme-color, #3858e9) 12%, transparent);
 }
 
-@media (min-width: 600px) {
-
-	.jtpp .jtpp-volume {
-		display: inline-block;
-	}
-}
 
 @media (max-width: 520px) {
 

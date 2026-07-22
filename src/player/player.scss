@@ -1283,11 +1283,17 @@
 
 .jtpp-lyrics-body {
 	flex: 1;
-	// Cap the line length so lyrics stay readable instead of running the full
-	// viewport width on large screens.
 	width: 100%;
-	max-width: 70ch;
+	// Break long lyrics into readable ~40ch columns. `balance` keeps the
+	// columns equal-height and, once every column the width allows is in use,
+	// grows the block's height (the panel scrolls vertically) rather than
+	// overflowing sideways.
+	column-width: 40ch;
+	column-gap: 4ch;
+	column-fill: balance;
+	padding-inline: 2ch;
 	margin-inline: auto;
+	box-sizing: border-box;
 	// Preserve line breaks and stanza whitespace from the textarea.
 	white-space: pre-wrap;
 	overflow-wrap: break-word;
@@ -1296,6 +1302,22 @@
 	// Allow selecting / copying lyrics text.
 	user-select: text;
 	-webkit-user-select: text;
+}
+
+// When every line fits on screen in a single 40ch column, JS marks the panel
+// so the lone column shrinks to its content and centers. Without this,
+// `balance` eagerly splits even short lyrics across the full width.
+.jtpp-lyrics-panel.is-single-col .jtpp-lyrics-body {
+	column-width: auto;
+	column-count: 1;
+	width: fit-content;
+	max-width: 100%;
+}
+
+.jtpp-lyrics-panel.is-single-col .jtpp-lyrics-header {
+	// Keep the title row aligned over the single centered column
+	// (40ch + 2ch padding either side).
+	max-width: 44ch;
 }
 
 .jtpp-fallback {

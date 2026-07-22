@@ -413,6 +413,16 @@ export class PracticePlayer {
 		this.lyricsCloseButton?.addEventListener( 'click', () =>
 			this.hideLyrics()
 		);
+		// Recompute single-vs-multi column layout whenever the panel's box
+		// changes — opening (0→visible), entering/leaving fullscreen, or a
+		// viewport resize all resize the panel and fire this.
+		const ResizeObs = this.rootEl.ownerDocument.defaultView?.ResizeObserver;
+		if ( this.lyricsPanel && ResizeObs ) {
+			this.lyricsColumnsObserver = new ResizeObs( () =>
+				this.updateLyricsColumns()
+			);
+			this.lyricsColumnsObserver.observe( this.lyricsPanel );
+		}
 		// The in-overlay collapse chevron always exits fullscreen (native or
 		// modal); toggleFullscreen() detects the active mode and reverses it.
 		this.fsCloseButton?.addEventListener( 'click', () =>
@@ -1577,6 +1587,7 @@ export class PracticePlayer {
 		// announce the dialog and its title heading; the Tab trap then keeps
 		// focus on the close button.
 		this.lyricsPanel.focus?.();
+		this.scheduleLyricsColumns();
 	}
 
 	// Keep Tab focus cycling inside the lyrics dialog. Only the panel's own
@@ -1612,6 +1623,7 @@ export class PracticePlayer {
 			return;
 		}
 		this.lyricsPanel.hidden = true;
+		this.lyricsPanel.classList.remove( 'is-single-col' );
 		this.lyricsButton?.setAttribute( 'aria-pressed', 'false' );
 		this.lyricsButton?.setAttribute( 'aria-label', 'Show lyrics' );
 		this.lyricsPanel.setAttribute( 'aria-modal', 'false' );
@@ -1636,6 +1648,32 @@ export class PracticePlayer {
 		const returnFocus = this.lyricsReturnFocus;
 		this.hideLyricsQuiet();
 		returnFocus?.focus?.();
+	}
+
+	// Choose between one centered lyrics column and the balanced multi-column
+	// layout: if the whole panel fits on screen as a single 40ch column, keep
+	// it centered; otherwise drop the marker and let CSS balance the lyrics
+	// into as many 40ch columns as the width allows (growing height after).
+	updateLyricsColumns() {
+		const panel = this.lyricsPanel;
+		if ( ! panel || panel.hidden ) {
+			return;
+		}
+		panel.classList.add( 'is-single-col' );
+		const fitsOneColumn = panel.scrollHeight <= panel.clientHeight + 1;
+		panel.classList.toggle( 'is-single-col', fitsOneColumn );
+	}
+
+	// Recompute the column layout after the next layout/paint, so measurements
+	// reflect freshly-set lyrics text.
+	scheduleLyricsColumns() {
+		const raf =
+			this.rootEl.ownerDocument.defaultView?.requestAnimationFrame;
+		if ( raf ) {
+			raf( () => this.updateLyricsColumns() );
+		} else {
+			this.updateLyricsColumns();
+		}
 	}
 
 	// Now-playing overflow menu (…): per-current-track Download / Share /
@@ -2627,6 +2665,9 @@ export class PracticePlayer {
 			if ( this.lyricsBodyEl ) {
 				this.lyricsBodyEl.textContent = track.lyrics;
 			}
+			// New track's lyrics may be a different length — re-evaluate the
+			// single-vs-multi column layout.
+			this.scheduleLyricsColumns();
 		}
 		if ( this.lyricsButton ) {
 			this.lyricsButton.hidden = ! hasLyrics;

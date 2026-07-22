@@ -152,6 +152,22 @@ function resolve_tracks( array $refs ): array {
 			$tracks[] = $track;
 		}
 	}
+
+	// Stored titles/artists/albums can carry HTML entities (e.g. "&#8217;",
+	// "&#8211;"). The playlist rows render them through esc_html() in an HTML
+	// context, so the browser decodes them; but the now-playing/meta/lyrics
+	// titles are set from this JSON payload via textContent, which would show
+	// the raw entities. Decode once here so every consumer gets real
+	// characters.
+	foreach ( $tracks as &$track ) {
+		foreach ( array( 'title', 'artist', 'album' ) as $field ) {
+			if ( ! empty( $track[ $field ] ) ) {
+				$track[ $field ] = html_entity_decode( $track[ $field ], ENT_QUOTES, 'UTF-8' );
+			}
+		}
+	}
+	unset( $track );
+
 	return $tracks;
 }
 

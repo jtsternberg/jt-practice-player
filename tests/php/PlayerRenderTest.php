@@ -31,4 +31,20 @@ final class PlayerRenderTest extends TestCase {
 		$this->assertSame( '7.9.26 Practice', $data['options']['playlistTitle'] );
 		$this->assertSame( 'https://example.test/icon.png', $data['options']['siteIcon'] );
 	}
+
+	public function test_resolve_tracks_decodes_html_entities_in_title(): void {
+		$tracks = JTPP\resolve_tracks(
+			array(
+				array(
+					'url'    => 'https://media.example.test/sunshine.mp3',
+					'title'  => 'Ain&#8217;t No Sunshine &#8211; Notting Hill',
+					'artist' => 'Bill Withers',
+				),
+			)
+		);
+
+		// The JSON payload feeds the now-playing title via textContent, so it
+		// must carry real characters, not literal HTML entities.
+		$this->assertSame( 'Ain’t No Sunshine – Notting Hill', $tracks[0]['title'] );
+	}
 }

@@ -1396,8 +1396,14 @@
 	-webkit-overflow-scrolling: touch;
 	width: 100%;
 	box-sizing: border-box;
+	// Center the lyrics vertically when they're short enough to fit; `safe`
+	// falls back to top-alignment once they overflow, so the top stays
+	// scroll-reachable.
+	display: flex;
+	flex-direction: column;
+	justify-content: safe center;
 	padding:
-		20px max(24px, env(safe-area-inset-right)) 24px
+		32px max(24px, env(safe-area-inset-right)) 28px
 		max(24px, env(safe-area-inset-left));
 }
 

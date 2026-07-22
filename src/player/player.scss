@@ -1168,10 +1168,37 @@
 	outline: none;
 }
 
-.jtpp-volume {
+// The `.jtpp` prefix + !important beat a theme's `input[type="range"] { width:
+// 100% }`, which otherwise blows the volume up to the full control-row width.
+.jtpp .jtpp-volume {
 	display: none;
-	width: 112px;
+	// Compact, never stretches to fill the control row, and dimmed until
+	// touched so it recedes next to the primary transport (Spotify-style).
+	flex: 0 0 auto;
+	width: 84px !important;
 	accent-color: var(--jtpp-accent);
+	opacity: 0.55;
+	transition: opacity 140ms ease;
+}
+
+.jtpp .jtpp-volume:hover,
+.jtpp .jtpp-volume:focus-visible {
+	opacity: 1;
+}
+
+// Themes commonly blanket-style form inputs — e.g. this site's
+// `.dw-prose input:not([type="radio"]):not([type="checkbox"])` forces
+// `width: 100% !important` plus a border/background/padding box, specificity
+// (0,3,1). This selector (0,4,1) wins and strips that box back to a bare,
+// compact slider.
+.jtpp .jtpp-controls input[type="range"].jtpp-volume {
+	width: 84px !important;
+	max-width: 84px !important;
+	min-width: 0 !important;
+	padding: 0 !important;
+	border: 0 !important;
+	background: transparent !important;
+	box-shadow: none !important;
 }
 
 // Lyrics button: matches the other control buttons (circle pill).
@@ -1821,7 +1848,7 @@
 
 @media (min-width: 600px) {
 
-	.jtpp-volume {
+	.jtpp .jtpp-volume {
 		display: inline-block;
 	}
 }

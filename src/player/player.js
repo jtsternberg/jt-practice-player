@@ -1474,6 +1474,11 @@ export class PracticePlayer {
 		if ( event.key !== 'Tab' || ! this.fullscreenModal ) {
 			return;
 		}
+		// While the lyrics dialog is open its own trap owns Tab; don't also
+		// cycle focus across the (covered) fullscreen controls behind it.
+		if ( this.lyricsPanel && ! this.lyricsPanel.hidden ) {
+			return;
+		}
 		const focusable = Array.from(
 			this.rootEl.querySelectorAll(
 				'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -1540,15 +1545,51 @@ export class PracticePlayer {
 		}
 		this.lyricsPanel.hidden = false;
 		this.lyricsButton?.setAttribute( 'aria-pressed', 'true' );
+		this.lyricsReturnFocus =
+			this.rootEl.ownerDocument.activeElement || this.lyricsButton;
 
-		// In non-fullscreen, open as a modal overlay with scroll lock.
+		// Trap Tab inside the panel while it is open — it behaves as a modal
+		// dialog in both the standalone overlay and the fullscreen overlay.
+		this.lyricsTrapHandler = ( event ) => this.trapLyricsFocus( event );
+		this.lyricsPanel.addEventListener( 'keydown', this.lyricsTrapHandler );
+
+		// Outside fullscreen the panel is its own viewport-covering overlay, so
+		// it owns aria-modal + scroll lock. Inside fullscreen the fullscreen
+		// overlay already provides both.
 		if ( ! this.fullscreenModal ) {
 			this.lyricsIsModal = true;
 			this.lyricsPanel.setAttribute( 'aria-modal', 'true' );
-			this.lyricsReturnFocus =
-				this.rootEl.ownerDocument.activeElement || this.lyricsButton;
 			lockBodyScroll();
-			this.lyricsCloseButton?.focus?.();
+		}
+		// Move focus into the dialog so keyboard + screen-reader users land on
+		// it (and the Tab trap has somewhere to hold focus).
+		this.lyricsCloseButton?.focus?.();
+	}
+
+	// Keep Tab focus cycling inside the lyrics dialog. Only the panel's own
+	// focusables participate, so the covered player controls are excluded and
+	// it works as a real modal in both overlay modes.
+	trapLyricsFocus( event ) {
+		if ( event.key !== 'Tab' || this.lyricsPanel.hidden ) {
+			return;
+		}
+		const focusable = Array.from(
+			this.lyricsPanel.querySelectorAll(
+				'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+			)
+		).filter( ( el ) => el.offsetParent !== null );
+		if ( ! focusable.length ) {
+			return;
+		}
+		const first = focusable[ 0 ];
+		const last = focusable[ focusable.length - 1 ];
+		const activeEl = this.rootEl.ownerDocument.activeElement;
+		if ( event.shiftKey && activeEl === first ) {
+			event.preventDefault();
+			last.focus();
+		} else if ( ! event.shiftKey && activeEl === last ) {
+			event.preventDefault();
+			first.focus();
 		}
 	}
 
@@ -1559,12 +1600,19 @@ export class PracticePlayer {
 		}
 		this.lyricsPanel.hidden = true;
 		this.lyricsButton?.setAttribute( 'aria-pressed', 'false' );
+		if ( this.lyricsTrapHandler ) {
+			this.lyricsPanel.removeEventListener(
+				'keydown',
+				this.lyricsTrapHandler
+			);
+			this.lyricsTrapHandler = null;
+		}
 		if ( this.lyricsIsModal ) {
 			this.lyricsIsModal = false;
 			this.lyricsPanel.setAttribute( 'aria-modal', 'false' );
 			unlockBodyScroll();
-			this.lyricsReturnFocus = null;
 		}
+		this.lyricsReturnFocus = null;
 	}
 
 	hideLyrics() {

@@ -1203,13 +1203,26 @@
 	display: none;
 }
 
-// Inside the fullscreen overlay: anchor to the panel instead of the viewport.
+// Inside the fullscreen overlay: anchor to the fullscreen root instead of the
+// viewport. Opaque by default so the controls behind never bleed through.
 .jtpp.is-fullscreen-modal .jtpp-lyrics-panel {
 	position: absolute;
 	z-index: 20;
-	background: color-mix(in srgb, Canvas 93%, transparent);
-	-webkit-backdrop-filter: blur(12px);
-	backdrop-filter: blur(12px);
+	background: Canvas;
+}
+
+// Only soften to a translucent, blurred surface where backdrop-filter is
+// actually supported (otherwise the 7%-transparent background would let the
+// live player UI show through as an unreadable smear).
+@supports (
+	(backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+) {
+
+	.jtpp.is-fullscreen-modal .jtpp-lyrics-panel {
+		background: color-mix(in srgb, Canvas 93%, transparent);
+		-webkit-backdrop-filter: blur(12px);
+		backdrop-filter: blur(12px);
+	}
 }
 
 .jtpp-lyrics-header {

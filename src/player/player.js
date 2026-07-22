@@ -1443,6 +1443,12 @@ export class PracticePlayer {
 		if ( this.fullscreenModal ) {
 			return;
 		}
+		// Close a standalone lyrics overlay first — it owns its own scroll lock
+		// and viewport-fixed layer, which would otherwise stack on top of (and
+		// double-lock against) the fullscreen overlay we're about to open.
+		if ( this.lyricsPanel && ! this.lyricsPanel.hidden ) {
+			this.hideLyricsQuiet();
+		}
 		this.fullscreenModal = true;
 		const active = this.rootEl.ownerDocument.activeElement;
 		this.fullscreenReturnFocus =
@@ -1536,8 +1542,11 @@ export class PracticePlayer {
 		if ( ! track?.lyrics?.trim() || ! this.lyricsPanel ) {
 			return;
 		}
+		// A lyrics dialog and the now-playing overflow menu are mutually
+		// exclusive overlays; don't leave the menu open behind the panel.
+		this.closeMoreMenu( false );
 		if ( this.lyricsTitleEl ) {
-			this.lyricsTitleEl.textContent = track.title;
+			this.lyricsTitleEl.textContent = track.title || 'Lyrics';
 		}
 		if ( this.lyricsBodyEl ) {
 			// Preserve line breaks in lyrics text.
@@ -1546,6 +1555,9 @@ export class PracticePlayer {
 		this.lyricsPanel.hidden = false;
 		this.lyricsButton?.setAttribute( 'aria-pressed', 'true' );
 		this.lyricsButton?.setAttribute( 'aria-label', 'Hide lyrics' );
+		// It is always a modal dialog; declare it so regardless of which layer
+		// owns the scroll lock (see below).
+		this.lyricsPanel.setAttribute( 'aria-modal', 'true' );
 		this.lyricsReturnFocus =
 			this.rootEl.ownerDocument.activeElement || this.lyricsButton;
 
@@ -1555,16 +1567,16 @@ export class PracticePlayer {
 		this.lyricsPanel.addEventListener( 'keydown', this.lyricsTrapHandler );
 
 		// Outside fullscreen the panel is its own viewport-covering overlay, so
-		// it owns aria-modal + scroll lock. Inside fullscreen the fullscreen
-		// overlay already provides both.
+		// it owns the scroll lock. Inside fullscreen the fullscreen overlay
+		// already locked scroll.
 		if ( ! this.fullscreenModal ) {
 			this.lyricsIsModal = true;
-			this.lyricsPanel.setAttribute( 'aria-modal', 'true' );
 			lockBodyScroll();
 		}
-		// Move focus into the dialog so keyboard + screen-reader users land on
-		// it (and the Tab trap has somewhere to hold focus).
-		this.lyricsCloseButton?.focus?.();
+		// Move focus to the dialog itself (tabindex="-1") so screen readers
+		// announce the dialog and its title heading; the Tab trap then keeps
+		// focus on the close button.
+		this.lyricsPanel.focus?.();
 	}
 
 	// Keep Tab focus cycling inside the lyrics dialog. Only the panel's own
@@ -1602,6 +1614,7 @@ export class PracticePlayer {
 		this.lyricsPanel.hidden = true;
 		this.lyricsButton?.setAttribute( 'aria-pressed', 'false' );
 		this.lyricsButton?.setAttribute( 'aria-label', 'Show lyrics' );
+		this.lyricsPanel.setAttribute( 'aria-modal', 'false' );
 		if ( this.lyricsTrapHandler ) {
 			this.lyricsPanel.removeEventListener(
 				'keydown',
@@ -1611,7 +1624,6 @@ export class PracticePlayer {
 		}
 		if ( this.lyricsIsModal ) {
 			this.lyricsIsModal = false;
-			this.lyricsPanel.setAttribute( 'aria-modal', 'false' );
 			unlockBodyScroll();
 		}
 		this.lyricsReturnFocus = null;

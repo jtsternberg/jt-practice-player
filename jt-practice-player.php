@@ -302,7 +302,8 @@ function render_player( array $tracks, array $options ): string {
 		);
 	}
 
-	$loop_name_id = wp_unique_id( 'jtpp-loop-name-' );
+	$loop_name_id     = wp_unique_id( 'jtpp-loop-name-' );
+	$lyrics_title_id  = wp_unique_id( 'jtpp-lyrics-title-' );
 
 	ob_start();
 	?>
@@ -414,17 +415,22 @@ function render_player( array $tracks, array $options ): string {
 			<?php endif; ?>
 			<input type="range" class="jtpp-volume" min="0" max="1" step="0.05" value="1" aria-label="<?php esc_attr_e( 'Volume', 'jt-practice-player' ); ?>" />
 		</div>
-			<div class="jtpp-lyrics-panel" hidden role="dialog" aria-modal="false" aria-label="<?php esc_attr_e( 'Lyrics', 'jt-practice-player' ); ?>">
-				<div class="jtpp-lyrics-header">
-					<span class="jtpp-lyrics-title"></span>
-					<button type="button" class="jtpp-lyrics-close" aria-label="<?php esc_attr_e( 'Close lyrics', 'jt-practice-player' ); ?>"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
-				</div>
-				<div class="jtpp-lyrics-body"></div>
-			</div>
 	</div>
 	<?php if ( $options['playlist'] ) : ?>
 	</div>
 	<?php endif; ?>
+	<?php
+	// Rendered as a direct child of the block root (outside .jtpp-panel, whose
+	// `isolation: isolate` would trap this overlay's z-index in a local
+	// stacking context) so the fixed lyrics dialog reliably covers site chrome.
+	?>
+	<div class="jtpp-lyrics-panel" hidden role="dialog" aria-modal="false" tabindex="-1" aria-labelledby="<?php echo esc_attr( $lyrics_title_id ); ?>">
+		<div class="jtpp-lyrics-header">
+			<span class="jtpp-lyrics-title" id="<?php echo esc_attr( $lyrics_title_id ); ?>" role="heading" aria-level="2" aria-live="polite"></span>
+			<button type="button" class="jtpp-lyrics-close" aria-label="<?php esc_attr_e( 'Close lyrics', 'jt-practice-player' ); ?>"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+		</div>
+		<div class="jtpp-lyrics-body"></div>
+	</div>
 	<noscript>
 		<?php foreach ( $tracks as $track ) : ?>
 		<p><?php echo esc_html( $track['title'] ); ?></p>

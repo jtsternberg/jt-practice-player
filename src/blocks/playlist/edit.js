@@ -24,11 +24,10 @@ import {
 	Flex,
 	Notice,
 	TextControl,
-	Modal,
-	TextareaControl,
 } from '@wordpress/components';
 import { dragHandle } from '@wordpress/icons';
 import DebouncedText from '../../components/debounced-text';
+import LyricsEditor from '../../components/lyrics-editor';
 import {
 	canonicalFieldsFromTrack,
 	hasCanonicalChanges,
@@ -231,7 +230,6 @@ function TrackSettings( {
 	const [ suggestions, setSuggestions ] = useState( [] );
 	const [ saving, setSaving ] = useState( false );
 	const [ error, setError ] = useState( '' );
-	const [ lyricsModalOpen, setLyricsModalOpen ] = useState( false );
 
 	useEffect( () => {
 		if ( ! shouldSyncDraftWithBlockTrack( track ) ) {
@@ -560,47 +558,18 @@ function TrackSettings( {
 					{ __( 'Remove', 'jt-practice-player' ) }
 				</Button>
 			</Flex>
-			<Button
-				variant="tertiary"
-				className="jtpp-editor-lyrics-btn"
-				onClick={ () => setLyricsModalOpen( true ) }
-			>
-				{ draft.lyrics
-					? __( 'Edit lyrics', 'jt-practice-player' )
-					: __( 'Add lyrics', 'jt-practice-player' ) }
-			</Button>
-			{ lyricsModalOpen && (
-				<Modal
-					title={ __( 'Track lyrics', 'jt-practice-player' ) }
-					onRequestClose={ () => setLyricsModalOpen( false ) }
-					size="medium"
-				>
-					<TextareaControl
-						label={ __(
-							'Paste or type the lyrics below. They will be shown to listeners via a button on the player.',
-							'jt-practice-player'
-						) }
-						help={
-							isRegistry
-								? __(
-										'Lyrics belong to the shared track — save the track to apply them everywhere it is used.',
-										'jt-practice-player'
-								  )
-								: undefined
-						}
-						__nextHasNoMarginBottom
-						value={ draft.lyrics || '' }
-						rows={ 16 }
-						onChange={ ( v ) => updateDraft( 'lyrics', v ) }
-					/>
-					<Button
-						variant="primary"
-						onClick={ () => setLyricsModalOpen( false ) }
-					>
-						{ __( 'Close', 'jt-practice-player' ) }
-					</Button>
-				</Modal>
-			) }
+			<LyricsEditor
+				value={ draft.lyrics }
+				onChange={ ( v ) => updateDraft( 'lyrics', v ) }
+				help={
+					isRegistry
+						? __(
+								'Lyrics belong to the shared track — save the track to apply them everywhere it is used.',
+								'jt-practice-player'
+						  )
+						: undefined
+				}
+			/>
 		</>
 	);
 }

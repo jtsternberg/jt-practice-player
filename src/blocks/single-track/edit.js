@@ -14,10 +14,9 @@ import {
 	Button,
 	ButtonGroup,
 	Notice,
-	Modal,
-	TextareaControl,
 } from '@wordpress/components';
 import DebouncedText from '../../components/debounced-text';
+import LyricsEditor from '../../components/lyrics-editor';
 import {
 	canonicalFieldsFromTrack,
 	hasCanonicalChanges,
@@ -60,7 +59,6 @@ function SharedTrackEditor( { trackId, setAttributes } ) {
 	} );
 	const [ saving, setSaving ] = useState( false );
 	const [ error, setError ] = useState( '' );
-	const [ lyricsModalOpen, setLyricsModalOpen ] = useState( false );
 
 	useEffect( () => {
 		if ( ! trackId ) {
@@ -227,43 +225,14 @@ function SharedTrackEditor( { trackId, setAttributes } ) {
 							: undefined
 					}
 				/>
-				<Button
-					variant="tertiary"
-					className="jtpp-editor-lyrics-btn"
-					onClick={ () => setLyricsModalOpen( true ) }
-				>
-					{ draft.lyrics
-						? __( 'Edit lyrics', 'jt-practice-player' )
-						: __( 'Add lyrics', 'jt-practice-player' ) }
-				</Button>
-				{ lyricsModalOpen && (
-					<Modal
-						title={ __( 'Track lyrics', 'jt-practice-player' ) }
-						onRequestClose={ () => setLyricsModalOpen( false ) }
-						size="medium"
-					>
-						<TextareaControl
-							label={ __(
-								'Paste or type the lyrics below. They will be shown to listeners via a button on the player.',
-								'jt-practice-player'
-							) }
-							help={ __(
-								'Lyrics belong to the shared track — saving the track applies them everywhere it is used.',
-								'jt-practice-player'
-							) }
-							__nextHasNoMarginBottom
-							value={ draft.lyrics || '' }
-							rows={ 16 }
-							onChange={ ( v ) => updateDraft( 'lyrics', v ) }
-						/>
-						<Button
-							variant="primary"
-							onClick={ () => setLyricsModalOpen( false ) }
-						>
-							{ __( 'Close', 'jt-practice-player' ) }
-						</Button>
-					</Modal>
-				) }
+				<LyricsEditor
+					value={ draft.lyrics }
+					onChange={ ( v ) => updateDraft( 'lyrics', v ) }
+					help={ __(
+						'Lyrics belong to the shared track — saving the track applies them everywhere it is used.',
+						'jt-practice-player'
+					) }
+				/>
 				{ error ? (
 					<Notice status="error" isDismissible={ false }>
 						{ error }
@@ -305,7 +274,6 @@ export default function Edit( { attributes, setAttributes } ) {
 		loopColor,
 		playheadColor,
 	} = attributes;
-	const [ lyricsModalOpen, setLyricsModalOpen ] = useState( false );
 	const attachment = useSelect(
 		( select ) => ( id ? select( 'core' ).getMedia( id ) : null ),
 		[ id ]
@@ -576,44 +544,10 @@ export default function Edit( { attributes, setAttributes } ) {
 			     SharedTrackEditor); the block-level lyrics attribute is only
 			     the store for media/external tracks, which have no record. */ }
 			{ activeSource !== 'track' && (
-				<>
-					<Button
-						variant="tertiary"
-						className="jtpp-editor-lyrics-btn"
-						onClick={ () => setLyricsModalOpen( true ) }
-					>
-						{ lyrics
-							? __( 'Edit lyrics', 'jt-practice-player' )
-							: __( 'Add lyrics', 'jt-practice-player' ) }
-					</Button>
-
-					{ lyricsModalOpen && (
-						<Modal
-							title={ __( 'Track lyrics', 'jt-practice-player' ) }
-							onRequestClose={ () => setLyricsModalOpen( false ) }
-							size="medium"
-						>
-							<TextareaControl
-								label={ __(
-									'Paste or type the lyrics below. They will be shown to listeners via a button on the player.',
-									'jt-practice-player'
-								) }
-								__nextHasNoMarginBottom
-								value={ lyrics }
-								rows={ 16 }
-								onChange={ ( v ) =>
-									setAttributes( { lyrics: v } )
-								}
-							/>
-							<Button
-								variant="primary"
-								onClick={ () => setLyricsModalOpen( false ) }
-							>
-								{ __( 'Close', 'jt-practice-player' ) }
-							</Button>
-						</Modal>
-					) }
-				</>
+				<LyricsEditor
+					value={ lyrics }
+					onChange={ ( v ) => setAttributes( { lyrics: v } ) }
+				/>
 			) }
 		</div>
 	);

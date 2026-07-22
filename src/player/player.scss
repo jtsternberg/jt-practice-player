@@ -1196,11 +1196,9 @@
 	z-index: 2147483001;
 	display: flex;
 	flex-direction: column;
-	overflow-y: auto;
-	-webkit-overflow-scrolling: touch;
-	padding:
-		max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right))
-		max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+	// The body scrolls internally so the header and transport footer stay
+	// pinned; the panel itself must not scroll.
+	overflow: hidden;
 	background: Canvas;
 	color: CanvasText;
 	animation: jtpp-fs-in 160ms ease;
@@ -1273,14 +1271,37 @@
 }
 
 .jtpp-lyrics-header {
+	flex: 0 0 auto;
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
-	// Align the title + close button with the body's reading column.
-	width: 100%;
-	max-width: 70ch;
-	margin: 0 auto 16px;
+	gap: 14px;
+	padding:
+		14px max(20px, env(safe-area-inset-right)) 14px
+		max(20px, env(safe-area-inset-left));
+	// A soft dark band from the top keeps the title/artist legible over the
+	// artwork wash without a hard divider line.
+	background: linear-gradient(to bottom, color-mix(in srgb, Canvas 90%, transparent), transparent);
+}
+
+.jtpp-lyrics-art {
+	flex: 0 0 auto;
+	width: 44px;
+	height: 44px;
+	border-radius: 8px;
+	object-fit: cover;
+	box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+
+.jtpp-lyrics-art[hidden] {
+	display: none;
+}
+
+.jtpp-lyrics-heading {
+	display: flex;
+	flex: 1 1 auto;
+	min-width: 0;
+	flex-direction: column;
+	gap: 1px;
 }
 
 .jtpp-lyrics-title {
@@ -1288,17 +1309,32 @@
 	// a track title is long.
 	min-width: 0;
 	overflow: hidden;
-	font-size: 1.1rem;
+	font-size: 1.15rem;
 	font-weight: 740;
 	letter-spacing: -0.01em;
-	line-height: 1.3;
+	line-height: 1.25;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.jtpp-lyrics-artist {
+	min-width: 0;
+	overflow: hidden;
+	font-size: 0.85rem;
+	line-height: 1.3;
+	opacity: 0.68;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.jtpp-lyrics-artist[hidden] {
+	display: none;
 }
 
 .jtpp .jtpp-lyrics-close {
 	display: inline-flex;
 	flex: 0 0 auto;
+	margin-left: auto;
 	width: 34px;
 	height: 34px;
 	align-items: center;
@@ -1322,18 +1358,27 @@
 }
 
 .jtpp-lyrics-body {
-	flex: 1;
+	// The one scrolling region, between the pinned header and footer.
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
 	width: 100%;
+	box-sizing: border-box;
+	padding:
+		20px max(24px, env(safe-area-inset-right)) 24px
+		max(24px, env(safe-area-inset-left));
+}
+
+.jtpp-lyrics-columns {
 	// Break long lyrics into readable ~40ch columns. `balance` keeps the
 	// columns equal-height and, once every column the width allows is in use,
-	// grows the block's height (the panel scrolls vertically) rather than
-	// overflowing sideways.
+	// grows the block's height (the body scrolls) rather than overflowing
+	// sideways.
 	column-width: 40ch;
 	column-gap: 4ch;
 	column-fill: balance;
-	padding-inline: 2ch;
 	margin-inline: auto;
-	box-sizing: border-box;
 	// Preserve line breaks and stanza whitespace from the textarea.
 	white-space: pre-wrap;
 	overflow-wrap: break-word;
@@ -1344,20 +1389,60 @@
 	-webkit-user-select: text;
 }
 
-// When every line fits on screen in a single 40ch column, JS marks the panel
-// so the lone column shrinks to its content and centers. Without this,
-// `balance` eagerly splits even short lyrics across the full width.
-.jtpp-lyrics-panel.is-single-col .jtpp-lyrics-body {
+// When every line fits the body as a single 40ch column, JS marks the panel so
+// the lone column shrinks to its content and centers. Without this, `balance`
+// eagerly splits even short lyrics across the full width.
+.jtpp-lyrics-panel.is-single-col .jtpp-lyrics-columns {
 	column-width: auto;
 	column-count: 1;
 	width: fit-content;
 	max-width: 100%;
+	margin-inline: auto;
 }
 
-.jtpp-lyrics-panel.is-single-col .jtpp-lyrics-header {
-	// Keep the title row aligned over the single centered column
-	// (40ch + 2ch padding either side).
-	max-width: 44ch;
+// Transport footer — the live seek bar / times / control row relocated here by
+// JS while the modal is open, so playback stays controllable while reading.
+.jtpp-lyrics-footer {
+	flex: 0 0 auto;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	box-sizing: border-box;
+	padding:
+		10px max(20px, env(safe-area-inset-right))
+		max(14px, env(safe-area-inset-bottom))
+		max(20px, env(safe-area-inset-left));
+	// Dark band from the bottom for contrast over the artwork wash.
+	background: linear-gradient(to top, color-mix(in srgb, Canvas 92%, transparent), transparent);
+}
+
+.jtpp-lyrics-footer .jtpp-timeline,
+.jtpp-lyrics-footer .jtpp-times,
+.jtpp-lyrics-footer .jtpp-controls {
+	width: 100%;
+	max-width: 720px;
+}
+
+// The lyrics toggle inside the relocated controls is redundant here — the
+// header's close button already dismisses the modal.
+.jtpp .jtpp-lyrics-footer .jtpp-lyrics {
+	display: none;
+}
+
+// Mobile: collapse to the essential transport (seek + times + prev/play/next +
+// speed); drop the secondary controls to keep the footer uncrowded.
+@media (max-width: 600px) {
+
+	.jtpp-lyrics-footer .jtpp-back15,
+	.jtpp-lyrics-footer .jtpp-fwd15,
+	.jtpp-lyrics-footer .jtpp-random,
+	.jtpp-lyrics-footer .jtpp-repeat,
+	.jtpp-lyrics-footer .jtpp-fullscreen,
+	.jtpp-lyrics-footer .jtpp-volume {
+		display: none;
+	}
 }
 
 .jtpp-fallback {

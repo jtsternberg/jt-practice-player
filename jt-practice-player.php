@@ -449,10 +449,18 @@ function render_player( array $tracks, array $options ): string {
 	?>
 	<div class="jtpp-lyrics-panel" hidden role="dialog" aria-modal="false" tabindex="-1" aria-labelledby="<?php echo esc_attr( $lyrics_title_id ); ?>">
 		<div class="jtpp-lyrics-header">
-			<span class="jtpp-lyrics-title" id="<?php echo esc_attr( $lyrics_title_id ); ?>" role="heading" aria-level="2" aria-live="polite" aria-atomic="true"></span>
+			<img class="jtpp-lyrics-art" alt="" hidden />
+			<span class="jtpp-lyrics-heading">
+				<span class="jtpp-lyrics-title" id="<?php echo esc_attr( $lyrics_title_id ); ?>" role="heading" aria-level="2" aria-live="polite" aria-atomic="true"></span>
+				<span class="jtpp-lyrics-artist" aria-live="polite"></span>
+			</span>
 			<button type="button" class="jtpp-lyrics-close" aria-label="<?php esc_attr_e( 'Close lyrics', 'jt-practice-player' ); ?>"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
 		</div>
-		<div class="jtpp-lyrics-body"></div>
+		<div class="jtpp-lyrics-body"><div class="jtpp-lyrics-columns"></div></div>
+		<?php // The live transport (seek bar, times, controls, volume) is relocated
+		// into this footer by JS while the lyrics modal is open, then moved back
+		// on close — so playback stays controllable while reading. ?>
+		<div class="jtpp-lyrics-footer"></div>
 	</div>
 	<noscript>
 		<?php foreach ( $tracks as $track ) : ?>

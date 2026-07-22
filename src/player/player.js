@@ -1533,7 +1533,7 @@ export class PracticePlayer {
 
 	showLyrics() {
 		const track = this.currentTrack();
-		if ( ! track?.lyrics || ! this.lyricsPanel ) {
+		if ( ! track?.lyrics?.trim() || ! this.lyricsPanel ) {
 			return;
 		}
 		if ( this.lyricsTitleEl ) {
@@ -1545,6 +1545,7 @@ export class PracticePlayer {
 		}
 		this.lyricsPanel.hidden = false;
 		this.lyricsButton?.setAttribute( 'aria-pressed', 'true' );
+		this.lyricsButton?.setAttribute( 'aria-label', 'Hide lyrics' );
 		this.lyricsReturnFocus =
 			this.rootEl.ownerDocument.activeElement || this.lyricsButton;
 
@@ -1600,6 +1601,7 @@ export class PracticePlayer {
 		}
 		this.lyricsPanel.hidden = true;
 		this.lyricsButton?.setAttribute( 'aria-pressed', 'false' );
+		this.lyricsButton?.setAttribute( 'aria-label', 'Show lyrics' );
 		if ( this.lyricsTrapHandler ) {
 			this.lyricsPanel.removeEventListener(
 				'keydown',
@@ -2589,19 +2591,22 @@ export class PracticePlayer {
 			}
 		}
 		this.updateArtworkGlow( track );
-		// Show lyrics button only when the current track has lyrics.
-		const hasLyrics = Boolean( track.lyrics );
-		if ( this.lyricsButton ) {
-			this.lyricsButton.hidden = ! hasLyrics;
-		}
-		// Close an open lyrics panel when switching to a track without lyrics.
-		if ( ! hasLyrics && this.lyricsPanel && ! this.lyricsPanel.hidden ) {
+		// Show lyrics button only when the current track has (non-blank) lyrics.
+		const hasLyrics = Boolean( track.lyrics && track.lyrics.trim() );
+		const lyricsOpen = this.lyricsPanel && ! this.lyricsPanel.hidden;
+		if ( ! hasLyrics && lyricsOpen ) {
+			// Switching to a track without lyrics: close the panel, then move
+			// focus off the lyrics button before it is hidden below. Returning
+			// focus to a hidden element would strand it on <body> and drop the
+			// player's keyboard handling.
 			this.hideLyrics();
-		} else if (
-			hasLyrics &&
-			this.lyricsPanel &&
-			! this.lyricsPanel.hidden
-		) {
+			if (
+				this.lyricsButton &&
+				this.rootEl.ownerDocument.activeElement === this.lyricsButton
+			) {
+				this.playButton?.focus?.();
+			}
+		} else if ( hasLyrics && lyricsOpen ) {
 			// Panel is open and the new track has its own lyrics — refresh the
 			// content in place so it doesn't keep showing the previous track's.
 			if ( this.lyricsTitleEl ) {
@@ -2610,6 +2615,9 @@ export class PracticePlayer {
 			if ( this.lyricsBodyEl ) {
 				this.lyricsBodyEl.textContent = track.lyrics;
 			}
+		}
+		if ( this.lyricsButton ) {
+			this.lyricsButton.hidden = ! hasLyrics;
 		}
 		this.trackButtons.forEach( ( button, index ) => {
 			const active = index === this.activeIndex;

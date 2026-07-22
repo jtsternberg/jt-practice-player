@@ -84,7 +84,8 @@
 
 @media (prefers-reduced-motion: reduce) {
 
-	.jtpp.is-fullscreen-modal {
+	.jtpp.is-fullscreen-modal,
+	.jtpp-lyrics-panel {
 		animation: none;
 	}
 }
@@ -1216,14 +1217,23 @@
 	align-items: center;
 	justify-content: space-between;
 	gap: 12px;
-	margin-bottom: 16px;
+	// Align the title + close button with the body's reading column.
+	width: 100%;
+	max-width: 70ch;
+	margin: 0 auto 16px;
 }
 
 .jtpp-lyrics-title {
+	// Shrink / ellipsize instead of shoving the close button off the row when
+	// a track title is long.
+	min-width: 0;
+	overflow: hidden;
 	font-size: 1.1rem;
 	font-weight: 740;
 	letter-spacing: -0.01em;
 	line-height: 1.3;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .jtpp .jtpp-lyrics-close {
@@ -1253,6 +1263,11 @@
 
 .jtpp-lyrics-body {
 	flex: 1;
+	// Cap the line length so lyrics stay readable instead of running the full
+	// viewport width on large screens.
+	width: 100%;
+	max-width: 70ch;
+	margin-inline: auto;
 	// Preserve line breaks and stanza whitespace from the textarea.
 	white-space: pre-wrap;
 	overflow-wrap: break-word;

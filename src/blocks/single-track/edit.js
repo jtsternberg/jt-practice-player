@@ -56,9 +56,11 @@ function SharedTrackEditor( { trackId, setAttributes } ) {
 		album: '',
 		artwork: '',
 		duration: '',
+		lyrics: '',
 	} );
 	const [ saving, setSaving ] = useState( false );
 	const [ error, setError ] = useState( '' );
+	const [ lyricsModalOpen, setLyricsModalOpen ] = useState( false );
 
 	useEffect( () => {
 		if ( ! trackId ) {
@@ -71,6 +73,7 @@ function SharedTrackEditor( { trackId, setAttributes } ) {
 				album: '',
 				artwork: '',
 				duration: '',
+				lyrics: '',
 			} );
 			return undefined;
 		}
@@ -224,6 +227,43 @@ function SharedTrackEditor( { trackId, setAttributes } ) {
 							: undefined
 					}
 				/>
+				<Button
+					variant="tertiary"
+					className="jtpp-editor-lyrics-btn"
+					onClick={ () => setLyricsModalOpen( true ) }
+				>
+					{ draft.lyrics
+						? __( 'Edit lyrics', 'jt-practice-player' )
+						: __( 'Add lyrics', 'jt-practice-player' ) }
+				</Button>
+				{ lyricsModalOpen && (
+					<Modal
+						title={ __( 'Track lyrics', 'jt-practice-player' ) }
+						onRequestClose={ () => setLyricsModalOpen( false ) }
+						size="medium"
+					>
+						<TextareaControl
+							label={ __(
+								'Paste or type the lyrics below. They will be shown to listeners via a button on the player.',
+								'jt-practice-player'
+							) }
+							help={ __(
+								'Lyrics belong to the shared track — saving the track applies them everywhere it is used.',
+								'jt-practice-player'
+							) }
+							__nextHasNoMarginBottom
+							value={ draft.lyrics || '' }
+							rows={ 16 }
+							onChange={ ( v ) => updateDraft( 'lyrics', v ) }
+						/>
+						<Button
+							variant="primary"
+							onClick={ () => setLyricsModalOpen( false ) }
+						>
+							{ __( 'Close', 'jt-practice-player' ) }
+						</Button>
+					</Modal>
+				) }
 				{ error ? (
 					<Notice status="error" isDismissible={ false }>
 						{ error }
@@ -532,39 +572,48 @@ export default function Edit( { attributes, setAttributes } ) {
 
 			{ trackEditor }
 
-			<Button
-				variant="tertiary"
-				className="jtpp-editor-lyrics-btn"
-				onClick={ () => setLyricsModalOpen( true ) }
-			>
-				{ lyrics
-					? __( 'Edit lyrics', 'jt-practice-player' )
-					: __( 'Add lyrics', 'jt-practice-player' ) }
-			</Button>
-
-			{ lyricsModalOpen && (
-				<Modal
-					title={ __( 'Track lyrics', 'jt-practice-player' ) }
-					onRequestClose={ () => setLyricsModalOpen( false ) }
-					size="medium"
-				>
-					<TextareaControl
-						label={ __(
-							'Paste or type the lyrics below. They will be shown to listeners via a button on the player.',
-							'jt-practice-player'
-						) }
-						__nextHasNoMarginBottom
-						value={ lyrics }
-						rows={ 16 }
-						onChange={ ( v ) => setAttributes( { lyrics: v } ) }
-					/>
+			{ /* Shared tracks store lyrics on the registry record (edited in
+			     SharedTrackEditor); the block-level lyrics attribute is only
+			     the store for media/external tracks, which have no record. */ }
+			{ activeSource !== 'track' && (
+				<>
 					<Button
-						variant="primary"
-						onClick={ () => setLyricsModalOpen( false ) }
+						variant="tertiary"
+						className="jtpp-editor-lyrics-btn"
+						onClick={ () => setLyricsModalOpen( true ) }
 					>
-						{ __( 'Done', 'jt-practice-player' ) }
+						{ lyrics
+							? __( 'Edit lyrics', 'jt-practice-player' )
+							: __( 'Add lyrics', 'jt-practice-player' ) }
 					</Button>
-				</Modal>
+
+					{ lyricsModalOpen && (
+						<Modal
+							title={ __( 'Track lyrics', 'jt-practice-player' ) }
+							onRequestClose={ () => setLyricsModalOpen( false ) }
+							size="medium"
+						>
+							<TextareaControl
+								label={ __(
+									'Paste or type the lyrics below. They will be shown to listeners via a button on the player.',
+									'jt-practice-player'
+								) }
+								__nextHasNoMarginBottom
+								value={ lyrics }
+								rows={ 16 }
+								onChange={ ( v ) =>
+									setAttributes( { lyrics: v } )
+								}
+							/>
+							<Button
+								variant="primary"
+								onClick={ () => setLyricsModalOpen( false ) }
+							>
+								{ __( 'Close', 'jt-practice-player' ) }
+							</Button>
+						</Modal>
+					) }
+				</>
 			) }
 		</div>
 	);

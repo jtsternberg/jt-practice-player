@@ -565,7 +565,7 @@ function TrackSettings( {
 				className="jtpp-editor-lyrics-btn"
 				onClick={ () => setLyricsModalOpen( true ) }
 			>
-				{ track.lyrics
+				{ draft.lyrics
 					? __( 'Edit lyrics', 'jt-practice-player' )
 					: __( 'Add lyrics', 'jt-practice-player' ) }
 			</Button>
@@ -580,16 +580,24 @@ function TrackSettings( {
 							'Paste or type the lyrics below. They will be shown to listeners via a button on the player.',
 							'jt-practice-player'
 						) }
+						help={
+							isRegistry
+								? __(
+										'Lyrics belong to the shared track — save the track to apply them everywhere it is used.',
+										'jt-practice-player'
+								  )
+								: undefined
+						}
 						__nextHasNoMarginBottom
-						value={ track.lyrics || '' }
+						value={ draft.lyrics || '' }
 						rows={ 16 }
-						onChange={ ( v ) => setField( index, 'lyrics', v ) }
+						onChange={ ( v ) => updateDraft( 'lyrics', v ) }
 					/>
 					<Button
 						variant="primary"
 						onClick={ () => setLyricsModalOpen( false ) }
 					>
-						{ __( 'Done', 'jt-practice-player' ) }
+						{ __( 'Close', 'jt-practice-player' ) }
 					</Button>
 				</Modal>
 			) }

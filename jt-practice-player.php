@@ -24,6 +24,7 @@ const TRACK_URL_META_KEY      = '_jtpp_track_url';
 const TRACK_GUID_META_KEY     = '_jtpp_track_guid';
 const TRACK_DURATION_META_KEY = '_jtpp_track_duration';
 const TRACK_ARTWORK_META_KEY  = '_jtpp_track_artwork';
+const TRACK_LYRICS_META_KEY   = '_jtpp_track_lyrics';
 
 add_action( 'init', __NAMESPACE__ . '\\register' );
 add_action( 'save_post_' . TRACK_POST_TYPE, __NAMESPACE__ . '\\save_track_guid', 10, 2 );
@@ -89,7 +90,7 @@ function register_track_registry(): void {
 		);
 	}
 
-	foreach ( array( TRACK_URL_META_KEY, TRACK_GUID_META_KEY, TRACK_DURATION_META_KEY, TRACK_ARTWORK_META_KEY ) as $meta_key ) {
+	foreach ( array( TRACK_URL_META_KEY, TRACK_GUID_META_KEY, TRACK_DURATION_META_KEY, TRACK_ARTWORK_META_KEY, TRACK_LYRICS_META_KEY ) as $meta_key ) {
 		register_post_meta(
 			TRACK_POST_TYPE,
 			$meta_key,
@@ -113,6 +114,9 @@ function sanitize_track_meta( $value, string $meta_key ): string {
 	if ( TRACK_GUID_META_KEY === $meta_key ) {
 		$value = (string) $value;
 		return preg_match( '/^url:[a-f0-9]{16}$/', $value ) ? $value : '';
+	}
+	if ( TRACK_LYRICS_META_KEY === $meta_key ) {
+		return sanitize_textarea_field( $value );
 	}
 	return sanitize_text_field( $value );
 }
@@ -181,6 +185,7 @@ function resolve_registry_track( int $track_id, array $ref ): ?array {
 			'album'    => track_term_names( $track_id, TRACK_ALBUM_TAXONOMY ),
 			'artwork'  => sanitize_external_url( get_post_meta( $track_id, TRACK_ARTWORK_META_KEY, true ) ),
 			'duration' => sanitize_text_field( get_post_meta( $track_id, TRACK_DURATION_META_KEY, true ) ),
+			'lyrics'   => sanitize_textarea_field( get_post_meta( $track_id, TRACK_LYRICS_META_KEY, true ) ),
 		);
 
 		$memo[ $memo_key ] = $track;
@@ -190,6 +195,8 @@ function resolve_registry_track( int $track_id, array $ref ): ?array {
 		$track['title'] = sanitize_text_field( $ref['customTitle'] );
 	}
 
+	// A per-reference lyrics value (used by external tracks, which have no
+	// shared record) shadows the shared-track lyrics stored above.
 	if ( ! empty( $ref['lyrics'] ) ) {
 		$track['lyrics'] = sanitize_textarea_field( $ref['lyrics'] );
 	}
@@ -671,6 +678,7 @@ function save_registry_track_from_fields( array $fields ) {
 	update_post_meta( $saved_id, TRACK_URL_META_KEY, $url );
 	update_post_meta( $saved_id, TRACK_DURATION_META_KEY, sanitize_text_field( $fields['duration'] ?? '' ) );
 	update_post_meta( $saved_id, TRACK_ARTWORK_META_KEY, sanitize_external_url( $fields['artwork'] ?? '' ) );
+	update_post_meta( $saved_id, TRACK_LYRICS_META_KEY, sanitize_textarea_field( $fields['lyrics'] ?? '' ) );
 
 	save_track_guid( $saved_id, get_post( $saved_id ) );
 	wp_set_object_terms( $saved_id, term_names_from_param( $fields['artist'] ?? '' ), TRACK_ARTIST_TAXONOMY );
@@ -686,7 +694,7 @@ function save_registry_track_from_fields( array $fields ) {
  * REST, editor, and migration writes.
  *
  * @param int   $id     Track post ID.
- * @param array $fields Subset of title/url/artist/album/duration/artwork.
+ * @param array $fields Subset of title/url/artist/album/duration/artwork/lyrics.
  * @return int|\WP_Error Saved track ID or error.
  */
 function apply_registry_track_updates( int $id, array $fields ) {
@@ -703,9 +711,10 @@ function apply_registry_track_updates( int $id, array $fields ) {
 		'album'    => $current['album'],
 		'duration' => $current['duration'],
 		'artwork'  => $current['artwork'],
+		'lyrics'   => $current['lyrics'],
 	);
 
-	foreach ( array( 'title', 'url', 'artist', 'album', 'duration', 'artwork' ) as $key ) {
+	foreach ( array( 'title', 'url', 'artist', 'album', 'duration', 'artwork', 'lyrics' ) as $key ) {
 		if ( array_key_exists( $key, $fields ) && null !== $fields[ $key ] ) {
 			$merged[ $key ] = $fields[ $key ];
 		}
@@ -724,6 +733,7 @@ function rest_prepare_track( $post ): array {
 		'album'    => track_term_names( $track_id, TRACK_ALBUM_TAXONOMY ),
 		'duration' => sanitize_text_field( get_post_meta( $track_id, TRACK_DURATION_META_KEY, true ) ),
 		'artwork'  => sanitize_external_url( get_post_meta( $track_id, TRACK_ARTWORK_META_KEY, true ) ),
+		'lyrics'   => sanitize_textarea_field( get_post_meta( $track_id, TRACK_LYRICS_META_KEY, true ) ),
 		'guid'     => sanitize_track_meta( get_post_meta( $track_id, TRACK_GUID_META_KEY, true ), TRACK_GUID_META_KEY ),
 	);
 }
@@ -838,7 +848,7 @@ class CLI_Migrate_Tracks_Command {
  * stored guid, so saved loops and player state survive re-transposes/URL swaps.
  */
 class CLI_Track_Command {
-	private const FIELDS         = array( 'trackId', 'title', 'url', 'artist', 'album', 'duration', 'artwork', 'guid' );
+	private const FIELDS         = array( 'trackId', 'title', 'url', 'artist', 'album', 'duration', 'artwork', 'lyrics', 'guid' );
 	private const DEFAULT_FIELDS = 'trackId,title,artist,album,duration,url';
 
 	/**
@@ -852,6 +862,7 @@ class CLI_Track_Command {
 		'album'     => 'album',
 		'duration'  => 'duration',
 		'artwork'   => 'artwork',
+		'lyrics'    => 'lyrics',
 	);
 
 	/**
@@ -876,6 +887,9 @@ class CLI_Track_Command {
 	 *
 	 * [--artwork=<url>]
 	 * : Artwork image URL.
+	 *
+	 * [--lyrics=<lyrics>]
+	 * : Track lyrics (plain text; newlines preserved).
 	 *
 	 * [--porcelain]
 	 * : Output just the new track ID.
@@ -1025,6 +1039,9 @@ class CLI_Track_Command {
 	 * [--artwork=<url>]
 	 * : New artwork URL.
 	 *
+	 * [--lyrics=<lyrics>]
+	 * : New track lyrics (plain text; newlines preserved).
+	 *
 	 * ## EXAMPLES
 	 *
 	 *     wp jtpp track update 36 --title="New Title" --artist="Birdtalker"
@@ -1144,6 +1161,7 @@ function migrate_track_refs_in_blocks( array &$blocks, bool $write, array &$resu
 				'album'    => $block['attrs']['externalAlbum'] ?? '',
 				'artwork'  => $block['attrs']['externalArtwork'] ?? '',
 				'duration' => $block['attrs']['externalDuration'] ?? '',
+				'lyrics'   => $block['attrs']['lyrics'] ?? '',
 			);
 			$next = migrate_inline_external_track_ref( $ref, $write, $result );
 			if ( ! empty( $next['trackId'] ) ) {

@@ -31,6 +31,7 @@ function wp_http_validate_url( $url ) {
 	return filter_var( $url, FILTER_VALIDATE_URL ) ? $url : false;
 }
 function sanitize_text_field( $text ) { return trim( wp_strip_all_tags( (string) $text ) ); }
+function sanitize_textarea_field( $text ) { return trim( strip_tags( (string) $text ) ); }
 function wp_strip_all_tags( $text ) { return strip_tags( (string) $text ); }
 function sanitize_hex_color( $color ) { return preg_match( '/^#[0-9a-f]{6}$/i', (string) $color ) ? $color : ''; }
 function wp_parse_url( $url, $component = -1 ) { return parse_url( $url, $component ); }

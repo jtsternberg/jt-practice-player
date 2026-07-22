@@ -42,6 +42,39 @@ final class TrackCrudTest extends TestCase {
 		$this->assertSame( 'Birdtalker', $GLOBALS['jtpp_test_terms'][ $id ][ JTPP\TRACK_ARTIST_TAXONOMY ][0]->name );
 	}
 
+	public function test_create_stores_lyrics_as_track_meta(): void {
+		$id = JTPP\save_registry_track_from_fields(
+			array(
+				'title'  => 'With Lyrics',
+				'url'    => 'https://media.example.test/lyrics.mp3',
+				'lyrics' => "verse one\nverse two",
+			)
+		);
+
+		$this->assertIsInt( $id );
+		$this->assertSame( "verse one\nverse two", $GLOBALS['jtpp_test_meta'][ $id ][ JTPP\TRACK_LYRICS_META_KEY ] );
+		$this->assertSame( "verse one\nverse two", JTPP\get_registry_track( $id )['lyrics'] );
+	}
+
+	public function test_partial_update_changes_lyrics_and_preserves_them_otherwise(): void {
+		$this->seed_track(
+			42,
+			array(
+				JTPP\TRACK_URL_META_KEY    => 'https://media.example.test/song.mp3',
+				JTPP\TRACK_GUID_META_KEY   => 'url:1234abcd5678ef90',
+				JTPP\TRACK_LYRICS_META_KEY => 'original lyrics',
+			)
+		);
+
+		// A title-only update leaves lyrics untouched.
+		JTPP\apply_registry_track_updates( 42, array( 'title' => 'Renamed' ) );
+		$this->assertSame( 'original lyrics', $GLOBALS['jtpp_test_meta'][42][ JTPP\TRACK_LYRICS_META_KEY ] );
+
+		// Updating lyrics replaces them.
+		JTPP\apply_registry_track_updates( 42, array( 'lyrics' => 'updated lyrics' ) );
+		$this->assertSame( 'updated lyrics', $GLOBALS['jtpp_test_meta'][42][ JTPP\TRACK_LYRICS_META_KEY ] );
+	}
+
 	public function test_create_without_url_returns_wp_error(): void {
 		$result = JTPP\save_registry_track_from_fields( array( 'title' => 'No URL' ) );
 

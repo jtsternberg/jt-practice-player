@@ -5,6 +5,7 @@ const CANONICAL_KEYS = [
 	'album',
 	'duration',
 	'artwork',
+	'lyrics',
 ];
 
 function stripMarkup( value ) {
@@ -36,6 +37,7 @@ export function canonicalFieldsFromTrack( track ) {
 		album: track?.album || termsForTaxonomy( track, 'jtpp_track_album' ),
 		duration: track?.duration || meta._jtpp_track_duration || '',
 		artwork: track?.artwork || meta._jtpp_track_artwork || '',
+		lyrics: track?.lyrics || meta._jtpp_track_lyrics || '',
 	};
 }
 

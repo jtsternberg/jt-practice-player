@@ -16,6 +16,7 @@ import {
 	Notice,
 } from '@wordpress/components';
 import DebouncedText from '../../components/debounced-text';
+import LyricsEditor from '../../components/lyrics-editor';
 import {
 	canonicalFieldsFromTrack,
 	hasCanonicalChanges,
@@ -54,6 +55,7 @@ function SharedTrackEditor( { trackId, setAttributes } ) {
 		album: '',
 		artwork: '',
 		duration: '',
+		lyrics: '',
 	} );
 	const [ saving, setSaving ] = useState( false );
 	const [ error, setError ] = useState( '' );
@@ -69,6 +71,7 @@ function SharedTrackEditor( { trackId, setAttributes } ) {
 				album: '',
 				artwork: '',
 				duration: '',
+				lyrics: '',
 			} );
 			return undefined;
 		}
@@ -222,6 +225,14 @@ function SharedTrackEditor( { trackId, setAttributes } ) {
 							: undefined
 					}
 				/>
+				<LyricsEditor
+					value={ draft.lyrics }
+					onChange={ ( v ) => updateDraft( 'lyrics', v ) }
+					help={ __(
+						'Lyrics belong to the shared track — saving the track applies them everywhere it is used.',
+						'jt-practice-player'
+					) }
+				/>
 				{ error ? (
 					<Notice status="error" isDismissible={ false }>
 						{ error }
@@ -255,6 +266,7 @@ export default function Edit( { attributes, setAttributes } ) {
 		externalAlbum,
 		externalArtwork,
 		externalDuration,
+		lyrics,
 		showSkipButtons,
 		showSpeedControl,
 		showFullscreenControl,
@@ -527,6 +539,16 @@ export default function Edit( { attributes, setAttributes } ) {
 			</ButtonGroup>
 
 			{ trackEditor }
+
+			{ /* Shared tracks store lyrics on the registry record (edited in
+			     SharedTrackEditor); the block-level lyrics attribute is only
+			     the store for media/external tracks, which have no record. */ }
+			{ activeSource !== 'track' && (
+				<LyricsEditor
+					value={ lyrics }
+					onChange={ ( v ) => setAttributes( { lyrics: v } ) }
+				/>
+			) }
 		</div>
 	);
 }

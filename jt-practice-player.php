@@ -24,6 +24,7 @@ const TRACK_URL_META_KEY      = '_jtpp_track_url';
 const TRACK_GUID_META_KEY     = '_jtpp_track_guid';
 const TRACK_DURATION_META_KEY = '_jtpp_track_duration';
 const TRACK_ARTWORK_META_KEY  = '_jtpp_track_artwork';
+const TRACK_LYRICS_META_KEY   = '_jtpp_track_lyrics';
 
 add_action( 'init', __NAMESPACE__ . '\\register' );
 add_action( 'save_post_' . TRACK_POST_TYPE, __NAMESPACE__ . '\\save_track_guid', 10, 2 );
@@ -89,7 +90,7 @@ function register_track_registry(): void {
 		);
 	}
 
-	foreach ( array( TRACK_URL_META_KEY, TRACK_GUID_META_KEY, TRACK_DURATION_META_KEY, TRACK_ARTWORK_META_KEY ) as $meta_key ) {
+	foreach ( array( TRACK_URL_META_KEY, TRACK_GUID_META_KEY, TRACK_DURATION_META_KEY, TRACK_ARTWORK_META_KEY, TRACK_LYRICS_META_KEY ) as $meta_key ) {
 		register_post_meta(
 			TRACK_POST_TYPE,
 			$meta_key,
@@ -113,6 +114,9 @@ function sanitize_track_meta( $value, string $meta_key ): string {
 	if ( TRACK_GUID_META_KEY === $meta_key ) {
 		$value = (string) $value;
 		return preg_match( '/^url:[a-f0-9]{16}$/', $value ) ? $value : '';
+	}
+	if ( TRACK_LYRICS_META_KEY === $meta_key ) {
+		return sanitize_textarea_field( $value );
 	}
 	return sanitize_text_field( $value );
 }
@@ -197,6 +201,7 @@ function resolve_registry_track( int $track_id, array $ref ): ?array {
 			'album'    => track_term_names( $track_id, TRACK_ALBUM_TAXONOMY ),
 			'artwork'  => sanitize_external_url( get_post_meta( $track_id, TRACK_ARTWORK_META_KEY, true ) ),
 			'duration' => sanitize_text_field( get_post_meta( $track_id, TRACK_DURATION_META_KEY, true ) ),
+			'lyrics'   => sanitize_textarea_field( get_post_meta( $track_id, TRACK_LYRICS_META_KEY, true ) ),
 		);
 
 		$memo[ $memo_key ] = $track;
@@ -204,6 +209,12 @@ function resolve_registry_track( int $track_id, array $ref ): ?array {
 
 	if ( ! empty( $ref['customTitle'] ) ) {
 		$track['title'] = sanitize_text_field( $ref['customTitle'] );
+	}
+
+	// A per-reference lyrics value (used by external tracks, which have no
+	// shared record) shadows the shared-track lyrics stored above.
+	if ( ! empty( $ref['lyrics'] ) ) {
+		$track['lyrics'] = sanitize_textarea_field( $ref['lyrics'] );
 	}
 
 	return $track;
@@ -239,6 +250,7 @@ function resolve_attachment_track( int $id, string $url, array $ref ): array {
 		'album'    => sanitize_text_field( $meta['album'] ?? '' ),
 		'artwork'  => $artwork ? set_url_scheme( $artwork[0] ) : '',
 		'duration' => sanitize_text_field( $meta['length_formatted'] ?? '' ),
+		'lyrics'   => sanitize_textarea_field( $ref['lyrics'] ?? '' ),
 	);
 }
 
@@ -258,6 +270,7 @@ function resolve_external_track( array $ref ): ?array {
 		'album'    => sanitize_text_field( $ref['album'] ?? '' ),
 		'artwork'  => sanitize_external_url( $ref['artwork'] ?? '' ),
 		'duration' => sanitize_text_field( $ref['duration'] ?? '' ),
+		'lyrics'   => sanitize_textarea_field( $ref['lyrics'] ?? '' ),
 	);
 }
 
@@ -312,7 +325,8 @@ function render_player( array $tracks, array $options ): string {
 		);
 	}
 
-	$loop_name_id = wp_unique_id( 'jtpp-loop-name-' );
+	$loop_name_id     = wp_unique_id( 'jtpp-loop-name-' );
+	$lyrics_title_id  = wp_unique_id( 'jtpp-lyrics-title-' );
 
 	ob_start();
 	?>
@@ -414,6 +428,7 @@ function render_player( array $tracks, array $options ): string {
 			<?php if ( $options['playlist'] ) : ?><button type="button" class="jtpp-random" aria-label="<?php esc_attr_e( 'Random order', 'jt-practice-player' ); ?>" aria-pressed="false"><?php echo icon( 'shuffle' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button><?php endif; ?>
 			<?php if ( $options['playlist'] ) : ?><button type="button" class="jtpp-repeat" aria-label="<?php esc_attr_e( 'Repeat off', 'jt-practice-player' ); ?>" aria-pressed="false"><?php echo icon( 'repeat' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button><?php endif; ?>
 			<?php if ( ! empty( $options['fullscreen'] ) ) : ?><button type="button" class="jtpp-fullscreen" aria-label="<?php esc_attr_e( 'Enter fullscreen', 'jt-practice-player' ); ?>" aria-pressed="false"><?php echo icon( 'fullscreen' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button><?php endif; ?>
+			<button type="button" class="jtpp-lyrics" hidden aria-label="<?php esc_attr_e( 'Show lyrics', 'jt-practice-player' ); ?>" aria-pressed="false"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></button>
 			<?php if ( $options['speed'] ) : ?>
 			<select class="jtpp-speed" aria-label="<?php esc_attr_e( 'Playback speed', 'jt-practice-player' ); ?>">
 				<?php foreach ( array( '0.5', '0.6', '0.7', '0.75', '0.8', '0.9', '1', '1.1', '1.2', '1.25', '1.5', '1.75', '2' ) as $rate ) : ?>
@@ -427,6 +442,18 @@ function render_player( array $tracks, array $options ): string {
 	<?php if ( $options['playlist'] ) : ?>
 	</div>
 	<?php endif; ?>
+	<?php
+	// Rendered as a direct child of the block root (outside .jtpp-panel, whose
+	// `isolation: isolate` would trap this overlay's z-index in a local
+	// stacking context) so the fixed lyrics dialog reliably covers site chrome.
+	?>
+	<div class="jtpp-lyrics-panel" hidden role="dialog" aria-modal="false" tabindex="-1" aria-labelledby="<?php echo esc_attr( $lyrics_title_id ); ?>">
+		<div class="jtpp-lyrics-header">
+			<span class="jtpp-lyrics-title" id="<?php echo esc_attr( $lyrics_title_id ); ?>" role="heading" aria-level="2" aria-live="polite" aria-atomic="true"></span>
+			<button type="button" class="jtpp-lyrics-close" aria-label="<?php esc_attr_e( 'Close lyrics', 'jt-practice-player' ); ?>"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+		</div>
+		<div class="jtpp-lyrics-body"></div>
+	</div>
 	<noscript>
 		<?php foreach ( $tracks as $track ) : ?>
 		<p><?php echo esc_html( $track['title'] ); ?></p>
@@ -667,6 +694,7 @@ function save_registry_track_from_fields( array $fields ) {
 	update_post_meta( $saved_id, TRACK_URL_META_KEY, $url );
 	update_post_meta( $saved_id, TRACK_DURATION_META_KEY, sanitize_text_field( $fields['duration'] ?? '' ) );
 	update_post_meta( $saved_id, TRACK_ARTWORK_META_KEY, sanitize_external_url( $fields['artwork'] ?? '' ) );
+	update_post_meta( $saved_id, TRACK_LYRICS_META_KEY, sanitize_textarea_field( $fields['lyrics'] ?? '' ) );
 
 	save_track_guid( $saved_id, get_post( $saved_id ) );
 	wp_set_object_terms( $saved_id, term_names_from_param( $fields['artist'] ?? '' ), TRACK_ARTIST_TAXONOMY );
@@ -682,7 +710,7 @@ function save_registry_track_from_fields( array $fields ) {
  * REST, editor, and migration writes.
  *
  * @param int   $id     Track post ID.
- * @param array $fields Subset of title/url/artist/album/duration/artwork.
+ * @param array $fields Subset of title/url/artist/album/duration/artwork/lyrics.
  * @return int|\WP_Error Saved track ID or error.
  */
 function apply_registry_track_updates( int $id, array $fields ) {
@@ -699,9 +727,10 @@ function apply_registry_track_updates( int $id, array $fields ) {
 		'album'    => $current['album'],
 		'duration' => $current['duration'],
 		'artwork'  => $current['artwork'],
+		'lyrics'   => $current['lyrics'],
 	);
 
-	foreach ( array( 'title', 'url', 'artist', 'album', 'duration', 'artwork' ) as $key ) {
+	foreach ( array( 'title', 'url', 'artist', 'album', 'duration', 'artwork', 'lyrics' ) as $key ) {
 		if ( array_key_exists( $key, $fields ) && null !== $fields[ $key ] ) {
 			$merged[ $key ] = $fields[ $key ];
 		}
@@ -720,6 +749,7 @@ function rest_prepare_track( $post ): array {
 		'album'    => track_term_names( $track_id, TRACK_ALBUM_TAXONOMY ),
 		'duration' => sanitize_text_field( get_post_meta( $track_id, TRACK_DURATION_META_KEY, true ) ),
 		'artwork'  => sanitize_external_url( get_post_meta( $track_id, TRACK_ARTWORK_META_KEY, true ) ),
+		'lyrics'   => sanitize_textarea_field( get_post_meta( $track_id, TRACK_LYRICS_META_KEY, true ) ),
 		'guid'     => sanitize_track_meta( get_post_meta( $track_id, TRACK_GUID_META_KEY, true ), TRACK_GUID_META_KEY ),
 	);
 }
@@ -834,7 +864,7 @@ class CLI_Migrate_Tracks_Command {
  * stored guid, so saved loops and player state survive re-transposes/URL swaps.
  */
 class CLI_Track_Command {
-	private const FIELDS         = array( 'trackId', 'title', 'url', 'artist', 'album', 'duration', 'artwork', 'guid' );
+	private const FIELDS         = array( 'trackId', 'title', 'url', 'artist', 'album', 'duration', 'artwork', 'lyrics', 'guid' );
 	private const DEFAULT_FIELDS = 'trackId,title,artist,album,duration,url';
 
 	/**
@@ -848,6 +878,7 @@ class CLI_Track_Command {
 		'album'     => 'album',
 		'duration'  => 'duration',
 		'artwork'   => 'artwork',
+		'lyrics'    => 'lyrics',
 	);
 
 	/**
@@ -872,6 +903,9 @@ class CLI_Track_Command {
 	 *
 	 * [--artwork=<url>]
 	 * : Artwork image URL.
+	 *
+	 * [--lyrics=<lyrics>]
+	 * : Track lyrics (plain text; newlines preserved).
 	 *
 	 * [--porcelain]
 	 * : Output just the new track ID.
@@ -1021,6 +1055,9 @@ class CLI_Track_Command {
 	 * [--artwork=<url>]
 	 * : New artwork URL.
 	 *
+	 * [--lyrics=<lyrics>]
+	 * : New track lyrics (plain text; newlines preserved).
+	 *
 	 * ## EXAMPLES
 	 *
 	 *     wp jtpp track update 36 --title="New Title" --artist="Birdtalker"
@@ -1140,6 +1177,7 @@ function migrate_track_refs_in_blocks( array &$blocks, bool $write, array &$resu
 				'album'    => $block['attrs']['externalAlbum'] ?? '',
 				'artwork'  => $block['attrs']['externalArtwork'] ?? '',
 				'duration' => $block['attrs']['externalDuration'] ?? '',
+				'lyrics'   => $block['attrs']['lyrics'] ?? '',
 			);
 			$next = migrate_inline_external_track_ref( $ref, $write, $result );
 			if ( ! empty( $next['trackId'] ) ) {

@@ -13,6 +13,7 @@ $jtpp_tracks = resolve_tracks(
 			'album'       => $attributes['externalAlbum'] ?? '',
 			'artwork'     => $attributes['externalArtwork'] ?? '',
 			'duration'    => $attributes['externalDuration'] ?? '',
+			'lyrics'      => $attributes['lyrics'] ?? '',
 		),
 	)
 );

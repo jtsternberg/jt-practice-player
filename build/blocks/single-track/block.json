@@ -60,6 +60,10 @@
       "type": "boolean",
       "default": true
     },
+    "lyrics": {
+      "type": "string",
+      "default": ""
+    },
     "accentColor": {
       "type": "string",
       "default": ""

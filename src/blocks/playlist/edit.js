@@ -27,6 +27,7 @@ import {
 } from '@wordpress/components';
 import { dragHandle } from '@wordpress/icons';
 import DebouncedText from '../../components/debounced-text';
+import LyricsEditor from '../../components/lyrics-editor';
 import {
 	canonicalFieldsFromTrack,
 	hasCanonicalChanges,
@@ -557,6 +558,18 @@ function TrackSettings( {
 					{ __( 'Remove', 'jt-practice-player' ) }
 				</Button>
 			</Flex>
+			<LyricsEditor
+				value={ draft.lyrics }
+				onChange={ ( v ) => updateDraft( 'lyrics', v ) }
+				help={
+					isRegistry
+						? __(
+								'Lyrics belong to the shared track — save the track to apply them everywhere it is used.',
+								'jt-practice-player'
+						  )
+						: undefined
+				}
+			/>
 		</>
 	);
 }

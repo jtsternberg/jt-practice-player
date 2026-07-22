@@ -388,6 +388,12 @@ export class PracticePlayer {
 		this.zoomInButton = this.rootEl.querySelector( '.jtpp-zoom-in' );
 		this.speedSelect = this.rootEl.querySelector( '.jtpp-speed' );
 		this.volumeInput = this.rootEl.querySelector( '.jtpp-volume' );
+		this.lyricsButton = this.rootEl.querySelector( '.jtpp-lyrics' );
+		this.lyricsPanel = this.rootEl.querySelector( '.jtpp-lyrics-panel' );
+		this.lyricsTitleEl = this.rootEl.querySelector( '.jtpp-lyrics-title' );
+		this.lyricsBodyEl = this.rootEl.querySelector( '.jtpp-lyrics-body' );
+		this.lyricsCloseButton =
+			this.rootEl.querySelector( '.jtpp-lyrics-close' );
 	}
 
 	bindControls() {
@@ -401,6 +407,22 @@ export class PracticePlayer {
 		this.fullscreenButton?.addEventListener( 'click', () =>
 			this.toggleFullscreen()
 		);
+		this.lyricsButton?.addEventListener( 'click', () =>
+			this.toggleLyrics()
+		);
+		this.lyricsCloseButton?.addEventListener( 'click', () =>
+			this.hideLyrics()
+		);
+		// Recompute single-vs-multi column layout whenever the panel's box
+		// changes — opening (0→visible), entering/leaving fullscreen, or a
+		// viewport resize all resize the panel and fire this.
+		const ResizeObs = this.rootEl.ownerDocument.defaultView?.ResizeObserver;
+		if ( this.lyricsPanel && ResizeObs ) {
+			this.lyricsColumnsObserver = new ResizeObs( () =>
+				this.updateLyricsColumns()
+			);
+			this.lyricsColumnsObserver.observe( this.lyricsPanel );
+		}
 		// The in-overlay collapse chevron always exits fullscreen (native or
 		// modal); toggleFullscreen() detects the active mode and reverses it.
 		this.fsCloseButton?.addEventListener( 'click', () =>
@@ -1431,6 +1453,12 @@ export class PracticePlayer {
 		if ( this.fullscreenModal ) {
 			return;
 		}
+		// Close a standalone lyrics overlay first — it owns its own scroll lock
+		// and viewport-fixed layer, which would otherwise stack on top of (and
+		// double-lock against) the fullscreen overlay we're about to open.
+		if ( this.lyricsPanel && ! this.lyricsPanel.hidden ) {
+			this.hideLyricsQuiet();
+		}
 		this.fullscreenModal = true;
 		const active = this.rootEl.ownerDocument.activeElement;
 		this.fullscreenReturnFocus =
@@ -1462,6 +1490,11 @@ export class PracticePlayer {
 		if ( event.key !== 'Tab' || ! this.fullscreenModal ) {
 			return;
 		}
+		// While the lyrics dialog is open its own trap owns Tab; don't also
+		// cycle focus across the (covered) fullscreen controls behind it.
+		if ( this.lyricsPanel && ! this.lyricsPanel.hidden ) {
+			return;
+		}
 		const focusable = Array.from(
 			this.rootEl.querySelectorAll(
 				'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -1487,8 +1520,11 @@ export class PracticePlayer {
 			return;
 		}
 		this.fullscreenModal = false;
-		// Exiting fullscreen also closes/resets the queue drawer.
+		// Exiting fullscreen also closes/resets the queue drawer and lyrics.
 		this.setQueueOpen( false );
+		if ( this.lyricsPanel && ! this.lyricsPanel.hidden ) {
+			this.hideLyricsQuiet();
+		}
 		this.rootEl.classList.remove( 'is-fullscreen-modal' );
 		this.rootEl.removeAttribute( 'role' );
 		this.rootEl.removeAttribute( 'aria-modal' );
@@ -1501,6 +1537,143 @@ export class PracticePlayer {
 		this.reflectFullscreen();
 		this.fullscreenReturnFocus?.focus?.();
 		this.fullscreenReturnFocus = null;
+	}
+
+	toggleLyrics() {
+		if ( this.lyricsPanel && ! this.lyricsPanel.hidden ) {
+			this.hideLyrics();
+		} else {
+			this.showLyrics();
+		}
+	}
+
+	showLyrics() {
+		const track = this.currentTrack();
+		if ( ! track?.lyrics?.trim() || ! this.lyricsPanel ) {
+			return;
+		}
+		// A lyrics dialog and the now-playing overflow menu are mutually
+		// exclusive overlays; don't leave the menu open behind the panel.
+		this.closeMoreMenu( false );
+		if ( this.lyricsTitleEl ) {
+			this.lyricsTitleEl.textContent = track.title || 'Lyrics';
+		}
+		if ( this.lyricsBodyEl ) {
+			// Preserve line breaks in lyrics text.
+			this.lyricsBodyEl.textContent = track.lyrics;
+		}
+		this.lyricsPanel.hidden = false;
+		this.lyricsButton?.setAttribute( 'aria-pressed', 'true' );
+		this.lyricsButton?.setAttribute( 'aria-label', 'Hide lyrics' );
+		// It is always a modal dialog; declare it so regardless of which layer
+		// owns the scroll lock (see below).
+		this.lyricsPanel.setAttribute( 'aria-modal', 'true' );
+		this.lyricsReturnFocus =
+			this.rootEl.ownerDocument.activeElement || this.lyricsButton;
+
+		// Trap Tab inside the panel while it is open — it behaves as a modal
+		// dialog in both the standalone overlay and the fullscreen overlay.
+		this.lyricsTrapHandler = ( event ) => this.trapLyricsFocus( event );
+		this.lyricsPanel.addEventListener( 'keydown', this.lyricsTrapHandler );
+
+		// Outside fullscreen the panel is its own viewport-covering overlay, so
+		// it owns the scroll lock. Inside fullscreen the fullscreen overlay
+		// already locked scroll.
+		if ( ! this.fullscreenModal ) {
+			this.lyricsIsModal = true;
+			lockBodyScroll();
+		}
+		// Move focus to the dialog itself (tabindex="-1") so screen readers
+		// announce the dialog and its title heading; the Tab trap then keeps
+		// focus on the close button.
+		this.lyricsPanel.focus?.();
+		this.scheduleLyricsColumns();
+	}
+
+	// Keep Tab focus cycling inside the lyrics dialog. Only the panel's own
+	// focusables participate, so the covered player controls are excluded and
+	// it works as a real modal in both overlay modes.
+	trapLyricsFocus( event ) {
+		if ( event.key !== 'Tab' || this.lyricsPanel.hidden ) {
+			return;
+		}
+		const focusable = Array.from(
+			this.lyricsPanel.querySelectorAll(
+				'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+			)
+		).filter( ( el ) => el.offsetParent !== null );
+		if ( ! focusable.length ) {
+			return;
+		}
+		const first = focusable[ 0 ];
+		const last = focusable[ focusable.length - 1 ];
+		const activeEl = this.rootEl.ownerDocument.activeElement;
+		if ( event.shiftKey && activeEl === first ) {
+			event.preventDefault();
+			last.focus();
+		} else if ( ! event.shiftKey && activeEl === last ) {
+			event.preventDefault();
+			first.focus();
+		}
+	}
+
+	// Close lyrics without returning focus (used when exiting fullscreen).
+	hideLyricsQuiet() {
+		if ( ! this.lyricsPanel ) {
+			return;
+		}
+		this.lyricsPanel.hidden = true;
+		this.lyricsPanel.classList.remove( 'is-single-col' );
+		this.lyricsButton?.setAttribute( 'aria-pressed', 'false' );
+		this.lyricsButton?.setAttribute( 'aria-label', 'Show lyrics' );
+		this.lyricsPanel.setAttribute( 'aria-modal', 'false' );
+		if ( this.lyricsTrapHandler ) {
+			this.lyricsPanel.removeEventListener(
+				'keydown',
+				this.lyricsTrapHandler
+			);
+			this.lyricsTrapHandler = null;
+		}
+		if ( this.lyricsIsModal ) {
+			this.lyricsIsModal = false;
+			unlockBodyScroll();
+		}
+		this.lyricsReturnFocus = null;
+	}
+
+	hideLyrics() {
+		if ( ! this.lyricsPanel ) {
+			return;
+		}
+		const returnFocus = this.lyricsReturnFocus;
+		this.hideLyricsQuiet();
+		returnFocus?.focus?.();
+	}
+
+	// Choose between one centered lyrics column and the balanced multi-column
+	// layout: if the whole panel fits on screen as a single 40ch column, keep
+	// it centered; otherwise drop the marker and let CSS balance the lyrics
+	// into as many 40ch columns as the width allows (growing height after).
+	updateLyricsColumns() {
+		const panel = this.lyricsPanel;
+		if ( ! panel || panel.hidden ) {
+			return;
+		}
+		panel.classList.add( 'is-single-col' );
+		const fitsOneColumn = panel.scrollHeight <= panel.clientHeight + 1;
+		panel.classList.toggle( 'is-single-col', fitsOneColumn );
+	}
+
+	// Recompute the column layout after the next layout/paint, so measurements
+	// reflect freshly-set lyrics text.
+	scheduleLyricsColumns() {
+		const raf =
+			this.rootEl.ownerDocument.defaultView?.requestAnimationFrame;
+		if ( raf ) {
+			raf( () => this.updateLyricsColumns() );
+		} else {
+			this.updateLyricsColumns();
+		}
 	}
 
 	// Now-playing overflow menu (…): per-current-track Download / Share /
@@ -2468,6 +2641,37 @@ export class PracticePlayer {
 			}
 		}
 		this.updateArtworkGlow( track );
+		// Show lyrics button only when the current track has (non-blank) lyrics.
+		const hasLyrics = Boolean( track.lyrics && track.lyrics.trim() );
+		const lyricsOpen = this.lyricsPanel && ! this.lyricsPanel.hidden;
+		if ( ! hasLyrics && lyricsOpen ) {
+			// Switching to a track without lyrics: close the panel, then move
+			// focus off the lyrics button before it is hidden below. Returning
+			// focus to a hidden element would strand it on <body> and drop the
+			// player's keyboard handling.
+			this.hideLyrics();
+			if (
+				this.lyricsButton &&
+				this.rootEl.ownerDocument.activeElement === this.lyricsButton
+			) {
+				this.playButton?.focus?.();
+			}
+		} else if ( hasLyrics && lyricsOpen ) {
+			// Panel is open and the new track has its own lyrics — refresh the
+			// content in place so it doesn't keep showing the previous track's.
+			if ( this.lyricsTitleEl ) {
+				this.lyricsTitleEl.textContent = track.title;
+			}
+			if ( this.lyricsBodyEl ) {
+				this.lyricsBodyEl.textContent = track.lyrics;
+			}
+			// New track's lyrics may be a different length — re-evaluate the
+			// single-vs-multi column layout.
+			this.scheduleLyricsColumns();
+		}
+		if ( this.lyricsButton ) {
+			this.lyricsButton.hidden = ! hasLyrics;
+		}
 		this.trackButtons.forEach( ( button, index ) => {
 			const active = index === this.activeIndex;
 			button.classList.toggle( 'is-active', active );
@@ -2574,6 +2778,8 @@ export class PracticePlayer {
 		// fullscreen handles its own Escape via the browser).
 		if ( this.moreMenuOpen ) {
 			handlers.Escape = () => this.closeMoreMenu();
+		} else if ( this.lyricsPanel && ! this.lyricsPanel.hidden ) {
+			handlers.Escape = () => this.hideLyrics();
 		} else if ( this.loopEditing ) {
 			handlers.Escape = () => this.exitLoopEditMode();
 		} else if ( this.fullscreenModal ) {

@@ -84,7 +84,8 @@
 
 @media (prefers-reduced-motion: reduce) {
 
-	.jtpp.is-fullscreen-modal {
+	.jtpp.is-fullscreen-modal,
+	.jtpp-lyrics-panel {
 		animation: none;
 	}
 }
@@ -1087,6 +1088,13 @@
 	transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease;
 }
 
+// The `display: inline-flex` above overrides the UA stylesheet's `[hidden]`
+// rule, so a control button toggled hidden in JS (e.g. .jtpp-lyrics when the
+// current track has no lyrics) would otherwise stay visible. Restore it.
+.jtpp .jtpp-controls > button[hidden] {
+	display: none;
+}
+
 .jtpp .jtpp-controls > button:hover,
 .jtpp .jtpp-controls > button:focus-visible {
 	color: var(--jtpp-accent) !important;
@@ -1164,6 +1172,192 @@
 	display: none;
 	width: 112px;
 	accent-color: var(--jtpp-accent);
+}
+
+// Lyrics button: matches the other control buttons (circle pill).
+// Shown only when the current track has lyrics (JS toggles `hidden`).
+.jtpp .jtpp-controls .jtpp-lyrics {
+	font-size: 0;
+}
+
+.jtpp .jtpp-controls .jtpp-lyrics[aria-pressed="true"] {
+	color: var(--jtpp-accent) !important;
+	border-color: var(--jtpp-accent) !important;
+	background: var(--jtpp-active) !important;
+}
+
+// Lyrics panel — a modal overlay for lyrics display.
+// Outside fullscreen: fixed overlay covering the viewport.
+// Inside fullscreen modal (.is-fullscreen-modal): absolute overlay within
+// the player panel (which already fills the screen as the fullscreen view).
+.jtpp-lyrics-panel {
+	position: fixed;
+	inset: 0;
+	z-index: 2147483001;
+	display: flex;
+	flex-direction: column;
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+	padding:
+		max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right))
+		max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+	background: Canvas;
+	color: CanvasText;
+	animation: jtpp-fs-in 160ms ease;
+}
+
+.jtpp-lyrics-panel[hidden] {
+	display: none;
+}
+
+// Non-fullscreen: suffuse the panel with a heavily-blurred wash of the current
+// track's artwork behind a dark scrim — the same "premium" look the fullscreen
+// panel gets (there, by blurring the artwork-rich fullscreen view behind it).
+// `--jtpp-artwork-glow` is set on the root by updateArtworkGlow(); it inherits
+// into this panel and updates on every track change. Falls back to the opaque
+// Canvas background below when the track has no artwork.
+.jtpp:not(.is-fullscreen-modal) .jtpp-lyrics-panel::before,
+.jtpp:not(.is-fullscreen-modal) .jtpp-lyrics-panel::after {
+	content: "";
+	// Fixed to the viewport (the panel already covers it) so the wash stays put
+	// while long lyrics scroll, and never adds to the panel's scroll height.
+	position: fixed;
+	inset: 0;
+	z-index: 0;
+	pointer-events: none;
+}
+
+.jtpp:not(.is-fullscreen-modal) .jtpp-lyrics-panel::before {
+	background-image: var(--jtpp-artwork-glow, none);
+	background-repeat: no-repeat;
+	background-position: center;
+	background-size: cover;
+	opacity: 0.7;
+	filter: blur(40px) saturate(1.4);
+	// Scale up so the blur's soft fringe falls outside the viewport edges.
+	transform: scale(1.2);
+}
+
+.jtpp:not(.is-fullscreen-modal) .jtpp-lyrics-panel::after {
+	// Dark scrim keeps lyrics at readable contrast over any artwork; Canvas
+	// keeps it theme-aware (dims on dark themes, lightens on light).
+	background: color-mix(in srgb, Canvas 85%, transparent);
+}
+
+// Keep the title + lyrics above the wash.
+.jtpp:not(.is-fullscreen-modal) .jtpp-lyrics-panel > * {
+	position: relative;
+	z-index: 1;
+}
+
+// Inside the fullscreen overlay: anchor to the fullscreen root instead of the
+// viewport. Opaque by default so the controls behind never bleed through.
+.jtpp.is-fullscreen-modal .jtpp-lyrics-panel {
+	position: absolute;
+	z-index: 20;
+	background: Canvas;
+}
+
+// Only soften to a translucent, blurred surface where backdrop-filter is
+// actually supported (otherwise the 7%-transparent background would let the
+// live player UI show through as an unreadable smear).
+@supports (
+	(backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+) {
+
+	.jtpp.is-fullscreen-modal .jtpp-lyrics-panel {
+		background: color-mix(in srgb, Canvas 93%, transparent);
+		-webkit-backdrop-filter: blur(12px);
+		backdrop-filter: blur(12px);
+	}
+}
+
+.jtpp-lyrics-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	// Align the title + close button with the body's reading column.
+	width: 100%;
+	max-width: 70ch;
+	margin: 0 auto 16px;
+}
+
+.jtpp-lyrics-title {
+	// Shrink / ellipsize instead of shoving the close button off the row when
+	// a track title is long.
+	min-width: 0;
+	overflow: hidden;
+	font-size: 1.1rem;
+	font-weight: 740;
+	letter-spacing: -0.01em;
+	line-height: 1.3;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.jtpp .jtpp-lyrics-close {
+	display: inline-flex;
+	flex: 0 0 auto;
+	width: 34px;
+	height: 34px;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	border: 1px solid var(--jtpp-line) !important;
+	border-radius: 999px;
+	color: inherit !important;
+	background: transparent !important;
+	box-shadow: none !important;
+	cursor: pointer;
+	transition: border-color 140ms ease, color 140ms ease;
+}
+
+.jtpp .jtpp-lyrics-close:hover,
+.jtpp .jtpp-lyrics-close:focus-visible {
+	color: var(--jtpp-accent) !important;
+	border-color: var(--jtpp-accent) !important;
+	background: var(--jtpp-active) !important;
+	outline: none;
+}
+
+.jtpp-lyrics-body {
+	flex: 1;
+	width: 100%;
+	// Break long lyrics into readable ~40ch columns. `balance` keeps the
+	// columns equal-height and, once every column the width allows is in use,
+	// grows the block's height (the panel scrolls vertically) rather than
+	// overflowing sideways.
+	column-width: 40ch;
+	column-gap: 4ch;
+	column-fill: balance;
+	padding-inline: 2ch;
+	margin-inline: auto;
+	box-sizing: border-box;
+	// Preserve line breaks and stanza whitespace from the textarea.
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+	font-size: 1.05rem;
+	line-height: 1.7;
+	// Allow selecting / copying lyrics text.
+	user-select: text;
+	-webkit-user-select: text;
+}
+
+// When every line fits on screen in a single 40ch column, JS marks the panel
+// so the lone column shrinks to its content and centers. Without this,
+// `balance` eagerly splits even short lyrics across the full width.
+.jtpp-lyrics-panel.is-single-col .jtpp-lyrics-body {
+	column-width: auto;
+	column-count: 1;
+	width: fit-content;
+	max-width: 100%;
+}
+
+.jtpp-lyrics-panel.is-single-col .jtpp-lyrics-header {
+	// Keep the title row aligned over the single centered column
+	// (40ch + 2ch padding either side).
+	max-width: 44ch;
 }
 
 .jtpp-fallback {

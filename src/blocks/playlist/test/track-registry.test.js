@@ -16,6 +16,7 @@ describe( 'track registry editor helpers', () => {
 						'https://media.example.test/wonderwall.mp3',
 					_jtpp_track_duration: '4:39',
 					_jtpp_track_artwork: 'https://img.example.test/art.jpg',
+					_jtpp_track_lyrics: 'Today is gonna be the day',
 				},
 				_embedded: {
 					'wp:term': [
@@ -37,6 +38,7 @@ describe( 'track registry editor helpers', () => {
 			album: 'Morning Glory',
 			duration: '4:39',
 			artwork: 'https://img.example.test/art.jpg',
+			lyrics: 'Today is gonna be the day',
 		} );
 
 		expect(
@@ -48,6 +50,7 @@ describe( 'track registry editor helpers', () => {
 				album: '',
 				duration: '3:48',
 				artwork: '',
+				lyrics: 'line one\nline two',
 			} )
 		).toEqual( {
 			trackId: 57,
@@ -57,6 +60,7 @@ describe( 'track registry editor helpers', () => {
 			album: '',
 			duration: '3:48',
 			artwork: '',
+			lyrics: 'line one\nline two',
 		} );
 	} );
 
@@ -77,6 +81,13 @@ describe( 'track registry editor helpers', () => {
 			hasCanonicalChanges( original, {
 				...original,
 				url: 'https://media.example.test/retransposed.mp3',
+			} )
+		).toBe( true );
+		// Lyrics are canonical: editing them alone marks the shared track dirty.
+		expect(
+			hasCanonicalChanges( original, {
+				...original,
+				lyrics: 'newly added lyrics',
 			} )
 		).toBe( true );
 	} );

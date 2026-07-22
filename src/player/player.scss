@@ -1210,6 +1210,46 @@
 	display: none;
 }
 
+// Non-fullscreen: suffuse the panel with a heavily-blurred wash of the current
+// track's artwork behind a dark scrim — the same "premium" look the fullscreen
+// panel gets (there, by blurring the artwork-rich fullscreen view behind it).
+// `--jtpp-artwork-glow` is set on the root by updateArtworkGlow(); it inherits
+// into this panel and updates on every track change. Falls back to the opaque
+// Canvas background below when the track has no artwork.
+.jtpp:not(.is-fullscreen-modal) .jtpp-lyrics-panel::before,
+.jtpp:not(.is-fullscreen-modal) .jtpp-lyrics-panel::after {
+	content: "";
+	// Fixed to the viewport (the panel already covers it) so the wash stays put
+	// while long lyrics scroll, and never adds to the panel's scroll height.
+	position: fixed;
+	inset: 0;
+	z-index: 0;
+	pointer-events: none;
+}
+
+.jtpp:not(.is-fullscreen-modal) .jtpp-lyrics-panel::before {
+	background-image: var(--jtpp-artwork-glow, none);
+	background-repeat: no-repeat;
+	background-position: center;
+	background-size: cover;
+	opacity: 0.7;
+	filter: blur(40px) saturate(1.4);
+	// Scale up so the blur's soft fringe falls outside the viewport edges.
+	transform: scale(1.2);
+}
+
+.jtpp:not(.is-fullscreen-modal) .jtpp-lyrics-panel::after {
+	// Dark scrim keeps lyrics at readable contrast over any artwork; Canvas
+	// keeps it theme-aware (dims on dark themes, lightens on light).
+	background: color-mix(in srgb, Canvas 85%, transparent);
+}
+
+// Keep the title + lyrics above the wash.
+.jtpp:not(.is-fullscreen-modal) .jtpp-lyrics-panel > * {
+	position: relative;
+	z-index: 1;
+}
+
 // Inside the fullscreen overlay: anchor to the fullscreen root instead of the
 // viewport. Opaque by default so the controls behind never bleed through.
 .jtpp.is-fullscreen-modal .jtpp-lyrics-panel {

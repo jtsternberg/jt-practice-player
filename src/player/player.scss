@@ -1281,6 +1281,8 @@
 	// A soft dark band from the top keeps the title/artist legible over the
 	// artwork wash without a hard divider line.
 	background: linear-gradient(to bottom, color-mix(in srgb, Canvas 90%, transparent), transparent);
+	// Crisp separation from the lyrics panel.
+	border-bottom: 1px solid color-mix(in srgb, CanvasText 16%, transparent);
 }
 
 .jtpp-lyrics-art {
@@ -1416,6 +1418,8 @@
 		max(20px, env(safe-area-inset-left));
 	// Dark band from the bottom for contrast over the artwork wash.
 	background: linear-gradient(to top, color-mix(in srgb, Canvas 92%, transparent), transparent);
+	// Crisp separation from the lyrics panel.
+	border-top: 1px solid color-mix(in srgb, CanvasText 16%, transparent);
 }
 
 .jtpp-lyrics-footer .jtpp-timeline,

@@ -14,6 +14,8 @@ import {
 	Button,
 	ButtonGroup,
 	Notice,
+	Modal,
+	TextareaControl,
 } from '@wordpress/components';
 import DebouncedText from '../../components/debounced-text';
 import {
@@ -255,6 +257,7 @@ export default function Edit( { attributes, setAttributes } ) {
 		externalAlbum,
 		externalArtwork,
 		externalDuration,
+		lyrics,
 		showSkipButtons,
 		showSpeedControl,
 		showFullscreenControl,
@@ -262,6 +265,7 @@ export default function Edit( { attributes, setAttributes } ) {
 		loopColor,
 		playheadColor,
 	} = attributes;
+	const [ lyricsModalOpen, setLyricsModalOpen ] = useState( false );
 	const attachment = useSelect(
 		( select ) => ( id ? select( 'core' ).getMedia( id ) : null ),
 		[ id ]
@@ -527,6 +531,41 @@ export default function Edit( { attributes, setAttributes } ) {
 			</ButtonGroup>
 
 			{ trackEditor }
+
+			<Button
+				variant="tertiary"
+				className="jtpp-editor-lyrics-btn"
+				onClick={ () => setLyricsModalOpen( true ) }
+			>
+				{ lyrics
+					? __( 'Edit lyrics', 'jt-practice-player' )
+					: __( 'Add lyrics', 'jt-practice-player' ) }
+			</Button>
+
+			{ lyricsModalOpen && (
+				<Modal
+					title={ __( 'Track lyrics', 'jt-practice-player' ) }
+					onRequestClose={ () => setLyricsModalOpen( false ) }
+					size="medium"
+				>
+					<TextareaControl
+						label={ __(
+							'Paste or type the lyrics below. They will be shown to listeners via a button on the player.',
+							'jt-practice-player'
+						) }
+						__nextHasNoMarginBottom
+						value={ lyrics }
+						rows={ 16 }
+						onChange={ ( v ) => setAttributes( { lyrics: v } ) }
+					/>
+					<Button
+						variant="primary"
+						onClick={ () => setLyricsModalOpen( false ) }
+					>
+						{ __( 'Done', 'jt-practice-player' ) }
+					</Button>
+				</Modal>
+			) }
 		</div>
 	);
 }

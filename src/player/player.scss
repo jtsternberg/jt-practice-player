@@ -1166,6 +1166,103 @@
 	accent-color: var(--jtpp-accent);
 }
 
+// Lyrics button: matches the other control buttons (circle pill).
+// Shown only when the current track has lyrics (JS toggles `hidden`).
+.jtpp .jtpp-controls .jtpp-lyrics {
+	font-size: 0;
+}
+
+.jtpp .jtpp-controls .jtpp-lyrics[aria-pressed="true"] {
+	color: var(--jtpp-accent) !important;
+	border-color: var(--jtpp-accent) !important;
+	background: var(--jtpp-active) !important;
+}
+
+// Lyrics panel — a modal overlay for lyrics display.
+// Outside fullscreen: fixed overlay covering the viewport.
+// Inside fullscreen modal (.is-fullscreen-modal): absolute overlay within
+// the player panel (which already fills the screen as the fullscreen view).
+.jtpp-lyrics-panel {
+	position: fixed;
+	inset: 0;
+	z-index: 2147483001;
+	display: flex;
+	flex-direction: column;
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
+	padding:
+		max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right))
+		max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+	background: Canvas;
+	color: CanvasText;
+	animation: jtpp-fs-in 160ms ease;
+}
+
+.jtpp-lyrics-panel[hidden] {
+	display: none;
+}
+
+// Inside the fullscreen overlay: anchor to the panel instead of the viewport.
+.jtpp.is-fullscreen-modal .jtpp-lyrics-panel {
+	position: absolute;
+	z-index: 20;
+	background: color-mix(in srgb, Canvas 93%, transparent);
+	-webkit-backdrop-filter: blur(12px);
+	backdrop-filter: blur(12px);
+}
+
+.jtpp-lyrics-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 16px;
+}
+
+.jtpp-lyrics-title {
+	font-size: 1.1rem;
+	font-weight: 740;
+	letter-spacing: -0.01em;
+	line-height: 1.3;
+}
+
+.jtpp .jtpp-lyrics-close {
+	display: inline-flex;
+	flex: 0 0 auto;
+	width: 34px;
+	height: 34px;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	border: 1px solid var(--jtpp-line) !important;
+	border-radius: 999px;
+	color: inherit !important;
+	background: transparent !important;
+	box-shadow: none !important;
+	cursor: pointer;
+	transition: border-color 140ms ease, color 140ms ease;
+}
+
+.jtpp .jtpp-lyrics-close:hover,
+.jtpp .jtpp-lyrics-close:focus-visible {
+	color: var(--jtpp-accent) !important;
+	border-color: var(--jtpp-accent) !important;
+	background: var(--jtpp-active) !important;
+	outline: none;
+}
+
+.jtpp-lyrics-body {
+	flex: 1;
+	// Preserve line breaks and stanza whitespace from the textarea.
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+	font-size: 1.05rem;
+	line-height: 1.7;
+	// Allow selecting / copying lyrics text.
+	user-select: text;
+	-webkit-user-select: text;
+}
+
 .jtpp-fallback {
 	display: grid;
 	gap: 12px;

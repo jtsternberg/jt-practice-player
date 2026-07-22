@@ -24,6 +24,8 @@ import {
 	Flex,
 	Notice,
 	TextControl,
+	Modal,
+	TextareaControl,
 } from '@wordpress/components';
 import { dragHandle } from '@wordpress/icons';
 import DebouncedText from '../../components/debounced-text';
@@ -229,6 +231,7 @@ function TrackSettings( {
 	const [ suggestions, setSuggestions ] = useState( [] );
 	const [ saving, setSaving ] = useState( false );
 	const [ error, setError ] = useState( '' );
+	const [ lyricsModalOpen, setLyricsModalOpen ] = useState( false );
 
 	useEffect( () => {
 		if ( ! shouldSyncDraftWithBlockTrack( track ) ) {
@@ -557,6 +560,39 @@ function TrackSettings( {
 					{ __( 'Remove', 'jt-practice-player' ) }
 				</Button>
 			</Flex>
+			<Button
+				variant="tertiary"
+				className="jtpp-editor-lyrics-btn"
+				onClick={ () => setLyricsModalOpen( true ) }
+			>
+				{ track.lyrics
+					? __( 'Edit lyrics', 'jt-practice-player' )
+					: __( 'Add lyrics', 'jt-practice-player' ) }
+			</Button>
+			{ lyricsModalOpen && (
+				<Modal
+					title={ __( 'Track lyrics', 'jt-practice-player' ) }
+					onRequestClose={ () => setLyricsModalOpen( false ) }
+					size="medium"
+				>
+					<TextareaControl
+						label={ __(
+							'Paste or type the lyrics below. They will be shown to listeners via a button on the player.',
+							'jt-practice-player'
+						) }
+						__nextHasNoMarginBottom
+						value={ track.lyrics || '' }
+						rows={ 16 }
+						onChange={ ( v ) => setField( index, 'lyrics', v ) }
+					/>
+					<Button
+						variant="primary"
+						onClick={ () => setLyricsModalOpen( false ) }
+					>
+						{ __( 'Done', 'jt-practice-player' ) }
+					</Button>
+				</Modal>
+			) }
 		</>
 	);
 }

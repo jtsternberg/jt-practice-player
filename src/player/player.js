@@ -388,6 +388,12 @@ export class PracticePlayer {
 		this.zoomInButton = this.rootEl.querySelector( '.jtpp-zoom-in' );
 		this.speedSelect = this.rootEl.querySelector( '.jtpp-speed' );
 		this.volumeInput = this.rootEl.querySelector( '.jtpp-volume' );
+		this.lyricsButton = this.rootEl.querySelector( '.jtpp-lyrics' );
+		this.lyricsPanel = this.rootEl.querySelector( '.jtpp-lyrics-panel' );
+		this.lyricsTitleEl = this.rootEl.querySelector( '.jtpp-lyrics-title' );
+		this.lyricsBodyEl = this.rootEl.querySelector( '.jtpp-lyrics-body' );
+		this.lyricsCloseButton =
+			this.rootEl.querySelector( '.jtpp-lyrics-close' );
 	}
 
 	bindControls() {
@@ -400,6 +406,12 @@ export class PracticePlayer {
 		);
 		this.fullscreenButton?.addEventListener( 'click', () =>
 			this.toggleFullscreen()
+		);
+		this.lyricsButton?.addEventListener( 'click', () =>
+			this.toggleLyrics()
+		);
+		this.lyricsCloseButton?.addEventListener( 'click', () =>
+			this.hideLyrics()
 		);
 		// The in-overlay collapse chevron always exits fullscreen (native or
 		// modal); toggleFullscreen() detects the active mode and reverses it.
@@ -1487,8 +1499,11 @@ export class PracticePlayer {
 			return;
 		}
 		this.fullscreenModal = false;
-		// Exiting fullscreen also closes/resets the queue drawer.
+		// Exiting fullscreen also closes/resets the queue drawer and lyrics.
 		this.setQueueOpen( false );
+		if ( this.lyricsPanel && ! this.lyricsPanel.hidden ) {
+			this.hideLyricsQuiet();
+		}
 		this.rootEl.classList.remove( 'is-fullscreen-modal' );
 		this.rootEl.removeAttribute( 'role' );
 		this.rootEl.removeAttribute( 'aria-modal' );
@@ -1501,6 +1516,64 @@ export class PracticePlayer {
 		this.reflectFullscreen();
 		this.fullscreenReturnFocus?.focus?.();
 		this.fullscreenReturnFocus = null;
+	}
+
+	toggleLyrics() {
+		if ( this.lyricsPanel && ! this.lyricsPanel.hidden ) {
+			this.hideLyrics();
+		} else {
+			this.showLyrics();
+		}
+	}
+
+	showLyrics() {
+		const track = this.currentTrack();
+		if ( ! track?.lyrics || ! this.lyricsPanel ) {
+			return;
+		}
+		if ( this.lyricsTitleEl ) {
+			this.lyricsTitleEl.textContent = track.title;
+		}
+		if ( this.lyricsBodyEl ) {
+			// Preserve line breaks in lyrics text.
+			this.lyricsBodyEl.textContent = track.lyrics;
+		}
+		this.lyricsPanel.hidden = false;
+		this.lyricsButton?.setAttribute( 'aria-pressed', 'true' );
+
+		// In non-fullscreen, open as a modal overlay with scroll lock.
+		if ( ! this.fullscreenModal ) {
+			this.lyricsIsModal = true;
+			this.lyricsPanel.setAttribute( 'aria-modal', 'true' );
+			this.lyricsReturnFocus =
+				this.rootEl.ownerDocument.activeElement || this.lyricsButton;
+			lockBodyScroll();
+			this.lyricsCloseButton?.focus?.();
+		}
+	}
+
+	// Close lyrics without returning focus (used when exiting fullscreen).
+	hideLyricsQuiet() {
+		if ( ! this.lyricsPanel ) {
+			return;
+		}
+		this.lyricsPanel.hidden = true;
+		this.lyricsButton?.setAttribute( 'aria-pressed', 'false' );
+		if ( this.lyricsIsModal ) {
+			this.lyricsIsModal = false;
+			this.lyricsPanel.setAttribute( 'aria-modal', 'false' );
+			unlockBodyScroll();
+			this.lyricsReturnFocus = null;
+		}
+	}
+
+	hideLyrics() {
+		if ( ! this.lyricsPanel ) {
+			return;
+		}
+		const returnFocus = this.lyricsReturnFocus;
+		this.hideLyricsQuiet();
+		returnFocus?.focus?.();
 	}
 
 	// Now-playing overflow menu (…): per-current-track Download / Share /
@@ -2468,6 +2541,28 @@ export class PracticePlayer {
 			}
 		}
 		this.updateArtworkGlow( track );
+		// Show lyrics button only when the current track has lyrics.
+		const hasLyrics = Boolean( track.lyrics );
+		if ( this.lyricsButton ) {
+			this.lyricsButton.hidden = ! hasLyrics;
+		}
+		// Close an open lyrics panel when switching to a track without lyrics.
+		if ( ! hasLyrics && this.lyricsPanel && ! this.lyricsPanel.hidden ) {
+			this.hideLyrics();
+		} else if (
+			hasLyrics &&
+			this.lyricsPanel &&
+			! this.lyricsPanel.hidden
+		) {
+			// Panel is open and the new track has its own lyrics — refresh the
+			// content in place so it doesn't keep showing the previous track's.
+			if ( this.lyricsTitleEl ) {
+				this.lyricsTitleEl.textContent = track.title;
+			}
+			if ( this.lyricsBodyEl ) {
+				this.lyricsBodyEl.textContent = track.lyrics;
+			}
+		}
 		this.trackButtons.forEach( ( button, index ) => {
 			const active = index === this.activeIndex;
 			button.classList.toggle( 'is-active', active );
@@ -2574,6 +2669,8 @@ export class PracticePlayer {
 		// fullscreen handles its own Escape via the browser).
 		if ( this.moreMenuOpen ) {
 			handlers.Escape = () => this.closeMoreMenu();
+		} else if ( this.lyricsPanel && ! this.lyricsPanel.hidden ) {
+			handlers.Escape = () => this.hideLyrics();
 		} else if ( this.loopEditing ) {
 			handlers.Escape = () => this.exitLoopEditMode();
 		} else if ( this.fullscreenModal ) {

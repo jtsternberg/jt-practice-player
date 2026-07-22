@@ -11,5 +11,6 @@
 !.env.example
 
 # Local dependency/cache artifacts.
+node_modules/
 vendor/
 .phpunit.result.cache

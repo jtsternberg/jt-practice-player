@@ -190,6 +190,10 @@ function resolve_registry_track( int $track_id, array $ref ): ?array {
 		$track['title'] = sanitize_text_field( $ref['customTitle'] );
 	}
 
+	if ( ! empty( $ref['lyrics'] ) ) {
+		$track['lyrics'] = sanitize_textarea_field( $ref['lyrics'] );
+	}
+
 	return $track;
 }
 
@@ -223,6 +227,7 @@ function resolve_attachment_track( int $id, string $url, array $ref ): array {
 		'album'    => sanitize_text_field( $meta['album'] ?? '' ),
 		'artwork'  => $artwork ? set_url_scheme( $artwork[0] ) : '',
 		'duration' => sanitize_text_field( $meta['length_formatted'] ?? '' ),
+		'lyrics'   => sanitize_textarea_field( $ref['lyrics'] ?? '' ),
 	);
 }
 
@@ -242,6 +247,7 @@ function resolve_external_track( array $ref ): ?array {
 		'album'    => sanitize_text_field( $ref['album'] ?? '' ),
 		'artwork'  => sanitize_external_url( $ref['artwork'] ?? '' ),
 		'duration' => sanitize_text_field( $ref['duration'] ?? '' ),
+		'lyrics'   => sanitize_textarea_field( $ref['lyrics'] ?? '' ),
 	);
 }
 
@@ -398,6 +404,7 @@ function render_player( array $tracks, array $options ): string {
 			<?php if ( $options['playlist'] ) : ?><button type="button" class="jtpp-random" aria-label="<?php esc_attr_e( 'Random order', 'jt-practice-player' ); ?>" aria-pressed="false"><?php echo icon( 'shuffle' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button><?php endif; ?>
 			<?php if ( $options['playlist'] ) : ?><button type="button" class="jtpp-repeat" aria-label="<?php esc_attr_e( 'Repeat off', 'jt-practice-player' ); ?>" aria-pressed="false"><?php echo icon( 'repeat' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button><?php endif; ?>
 			<?php if ( ! empty( $options['fullscreen'] ) ) : ?><button type="button" class="jtpp-fullscreen" aria-label="<?php esc_attr_e( 'Enter fullscreen', 'jt-practice-player' ); ?>" aria-pressed="false"><?php echo icon( 'fullscreen' ); // phpcs:ignore WordPress.Security.EscapeOutput ?></button><?php endif; ?>
+			<button type="button" class="jtpp-lyrics" hidden aria-label="<?php esc_attr_e( 'Show lyrics', 'jt-practice-player' ); ?>" aria-pressed="false"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg></button>
 			<?php if ( $options['speed'] ) : ?>
 			<select class="jtpp-speed" aria-label="<?php esc_attr_e( 'Playback speed', 'jt-practice-player' ); ?>">
 				<?php foreach ( array( '0.5', '0.6', '0.7', '0.75', '0.8', '0.9', '1', '1.1', '1.2', '1.25', '1.5', '1.75', '2' ) as $rate ) : ?>
@@ -407,6 +414,13 @@ function render_player( array $tracks, array $options ): string {
 			<?php endif; ?>
 			<input type="range" class="jtpp-volume" min="0" max="1" step="0.05" value="1" aria-label="<?php esc_attr_e( 'Volume', 'jt-practice-player' ); ?>" />
 		</div>
+			<div class="jtpp-lyrics-panel" hidden role="dialog" aria-modal="false" aria-label="<?php esc_attr_e( 'Lyrics', 'jt-practice-player' ); ?>">
+				<div class="jtpp-lyrics-header">
+					<span class="jtpp-lyrics-title"></span>
+					<button type="button" class="jtpp-lyrics-close" aria-label="<?php esc_attr_e( 'Close lyrics', 'jt-practice-player' ); ?>"><svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+				</div>
+				<div class="jtpp-lyrics-body"></div>
+			</div>
 	</div>
 	<?php if ( $options['playlist'] ) : ?>
 	</div>

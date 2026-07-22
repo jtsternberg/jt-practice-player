@@ -21,6 +21,7 @@
 		"showSkipButtons": { "type": "boolean", "default": true },
 		"showSpeedControl": { "type": "boolean", "default": true },
 		"showFullscreenControl": { "type": "boolean", "default": true },
+		"lyrics": { "type": "string", "default": "" },
 		"accentColor": { "type": "string", "default": "" },
 		"loopColor": { "type": "string", "default": "" },
 		"playheadColor": { "type": "string", "default": "" }

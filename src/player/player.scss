@@ -1396,12 +1396,6 @@
 	-webkit-overflow-scrolling: touch;
 	width: 100%;
 	box-sizing: border-box;
-	// Center the lyrics vertically when they're short enough to fit; `safe`
-	// falls back to top-alignment once they overflow, so the top stays
-	// scroll-reachable.
-	display: flex;
-	flex-direction: column;
-	justify-content: safe center;
 	padding:
 		32px max(24px, env(safe-area-inset-right)) 28px
 		max(24px, env(safe-area-inset-left));
@@ -1435,6 +1429,15 @@
 	width: fit-content;
 	max-width: 100%;
 	margin-inline: auto;
+}
+
+// Only when there's a single column that fits (short lyrics) do we center it
+// vertically. The multi-column case keeps the body a plain block so the
+// `column-width` balancing isn't disrupted by flex layout.
+.jtpp-lyrics-panel.is-single-col .jtpp-lyrics-body {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
 }
 
 // Transport footer — the live seek bar / times / control row relocated here by

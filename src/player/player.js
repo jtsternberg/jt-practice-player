@@ -392,8 +392,19 @@ export class PracticePlayer {
 		this.lyricsPanel = this.rootEl.querySelector( '.jtpp-lyrics-panel' );
 		this.lyricsTitleEl = this.rootEl.querySelector( '.jtpp-lyrics-title' );
 		this.lyricsBodyEl = this.rootEl.querySelector( '.jtpp-lyrics-body' );
+		this.lyricsColumnsEl = this.rootEl.querySelector(
+			'.jtpp-lyrics-columns'
+		);
 		this.lyricsCloseButton =
 			this.rootEl.querySelector( '.jtpp-lyrics-close' );
+		this.lyricsArtEl = this.rootEl.querySelector( '.jtpp-lyrics-art' );
+		this.lyricsArtistEl = this.rootEl.querySelector(
+			'.jtpp-lyrics-artist'
+		);
+		this.lyricsFooterEl = this.rootEl.querySelector(
+			'.jtpp-lyrics-footer'
+		);
+		this.timesEl = this.rootEl.querySelector( '.jtpp-times' );
 	}
 
 	bindControls() {
@@ -1558,10 +1569,14 @@ export class PracticePlayer {
 		if ( this.lyricsTitleEl ) {
 			this.lyricsTitleEl.textContent = track.title || 'Lyrics';
 		}
-		if ( this.lyricsBodyEl ) {
+		if ( this.lyricsColumnsEl ) {
 			// Preserve line breaks in lyrics text.
-			this.lyricsBodyEl.textContent = track.lyrics;
+			this.lyricsColumnsEl.textContent = track.lyrics;
 		}
+		this.setLyricsHeader( track );
+		// Bring the live transport into the modal so playback stays controllable
+		// while reading.
+		this.relocateTransport();
 		this.lyricsPanel.hidden = false;
 		this.lyricsButton?.setAttribute( 'aria-pressed', 'true' );
 		this.lyricsButton?.setAttribute( 'aria-label', 'Hide lyrics' );
@@ -1624,6 +1639,8 @@ export class PracticePlayer {
 		}
 		this.lyricsPanel.hidden = true;
 		this.lyricsPanel.classList.remove( 'is-single-col' );
+		// Return the live transport to its home in the main player.
+		this.restoreTransport();
 		this.lyricsButton?.setAttribute( 'aria-pressed', 'false' );
 		this.lyricsButton?.setAttribute( 'aria-label', 'Show lyrics' );
 		this.lyricsPanel.setAttribute( 'aria-modal', 'false' );
@@ -1650,17 +1667,69 @@ export class PracticePlayer {
 		returnFocus?.focus?.();
 	}
 
+	// Populate the modal header (artwork thumbnail + artist) for a track. The
+	// title is set separately (it doubles as the aria-live heading).
+	setLyricsHeader( track ) {
+		if ( this.lyricsArtistEl ) {
+			this.lyricsArtistEl.textContent = track?.artist || '';
+			this.lyricsArtistEl.hidden = ! track?.artist;
+		}
+		if ( this.lyricsArtEl ) {
+			if ( track?.artwork ) {
+				this.lyricsArtEl.src = track.artwork;
+				this.lyricsArtEl.hidden = false;
+			} else {
+				this.lyricsArtEl.removeAttribute( 'src' );
+				this.lyricsArtEl.hidden = true;
+			}
+		}
+	}
+
+	// Move the live transport (seek bar, times, control row incl. volume) into
+	// the modal footer, remembering each node's original slot. Moving — not
+	// cloning — keeps every event binding and playback state intact.
+	relocateTransport() {
+		if ( ! this.lyricsFooterEl || this.transportHome ) {
+			return; // no footer, or already relocated
+		}
+		const nodes = [ this.timelineEl, this.timesEl, this.controlsEl ].filter(
+			Boolean
+		);
+		this.transportHome = nodes.map( ( node ) => ( {
+			node,
+			parent: node.parentNode,
+			next: node.nextSibling,
+		} ) );
+		nodes.forEach( ( node ) => this.lyricsFooterEl.appendChild( node ) );
+		this.lyricsPanel?.classList.add( 'has-transport' );
+	}
+
+	// Put the transport back exactly where it was in the main player.
+	restoreTransport() {
+		if ( ! this.transportHome ) {
+			return;
+		}
+		this.transportHome.forEach( ( { node, parent, next } ) => {
+			parent?.insertBefore( node, next );
+		} );
+		this.transportHome = null;
+		this.lyricsPanel?.classList.remove( 'has-transport' );
+	}
+
 	// Choose between one centered lyrics column and the balanced multi-column
 	// layout: if the whole panel fits on screen as a single 40ch column, keep
 	// it centered; otherwise drop the marker and let CSS balance the lyrics
 	// into as many 40ch columns as the width allows (growing height after).
 	updateLyricsColumns() {
 		const panel = this.lyricsPanel;
-		if ( ! panel || panel.hidden ) {
+		const body = this.lyricsBodyEl;
+		if ( ! panel || ! body || panel.hidden ) {
 			return;
 		}
+		// The body is the scroll area (header + footer are pinned); if the lyrics
+		// fit it as one column, keep a single centered column, else go multi.
 		panel.classList.add( 'is-single-col' );
-		const fitsOneColumn = panel.scrollHeight <= panel.clientHeight + 1;
+		const fitsOneColumn = body.scrollHeight <= body.clientHeight + 1;
 		panel.classList.toggle( 'is-single-col', fitsOneColumn );
 	}
 
@@ -2662,9 +2731,10 @@ export class PracticePlayer {
 			if ( this.lyricsTitleEl ) {
 				this.lyricsTitleEl.textContent = track.title;
 			}
-			if ( this.lyricsBodyEl ) {
-				this.lyricsBodyEl.textContent = track.lyrics;
+			if ( this.lyricsColumnsEl ) {
+				this.lyricsColumnsEl.textContent = track.lyrics;
 			}
+			this.setLyricsHeader( track );
 			// New track's lyrics may be a different length — re-evaluate the
 			// single-vs-multi column layout.
 			this.scheduleLyricsColumns();

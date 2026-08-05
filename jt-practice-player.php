@@ -29,6 +29,8 @@ const TRACK_LYRICS_META_KEY   = '_jtpp_track_lyrics';
 add_action( 'init', __NAMESPACE__ . '\\register' );
 add_action( 'save_post_' . TRACK_POST_TYPE, __NAMESPACE__ . '\\save_track_guid', 10, 2 );
 add_action( 'rest_api_init', __NAMESPACE__ . '\\register_rest_routes' );
+add_action( 'cmb2_admin_init', __NAMESPACE__ . '\\register_track_cmb2_box' );
+add_action( 'cmb2_save_field_' . TRACK_URL_META_KEY, __NAMESPACE__ . '\\cmb2_backfill_track_guid', 10, 3 );
 if ( defined( 'WP_CLI' ) && WP_CLI ) {
 	\WP_CLI::add_command( 'jtpp migrate-tracks', __NAMESPACE__ . '\\CLI_Migrate_Tracks_Command' );
 	\WP_CLI::add_command( 'jtpp track', __NAMESPACE__ . '\\CLI_Track_Command' );
@@ -130,6 +132,138 @@ function save_track_guid( int $post_id, $post ): void {
 	$guid = track_guid_from_url( get_post_meta( $post_id, TRACK_URL_META_KEY, true ) );
 	if ( $guid ) {
 		update_post_meta( $post_id, TRACK_GUID_META_KEY, $guid );
+	}
+}
+
+/**
+ * Give the track meta an editing UI on the wp-admin track screen.
+ *
+ * Hooked to 'cmb2_admin_init', which CMB2's own bootstrap only fires once CMB2
+ * is loaded, so the whole feature is absent (not broken) without CMB2. The
+ * function_exists() check covers a bundled-but-partial CMB2 copy.
+ *
+ * CMB2 writes through update_metadata(), so register_post_meta()'s
+ * sanitize_callback (sanitize_track_meta()) always runs last regardless. Every
+ * field disables CMB2's own pass so that stays the single sanitizer for these
+ * keys, matching the REST and WP-CLI writers.
+ */
+function register_track_cmb2_box(): void {
+	if ( ! function_exists( 'new_cmb2_box' ) ) {
+		return;
+	}
+
+	$cmb = new_cmb2_box(
+		array(
+			'id'           => 'jtpp_track_details',
+			'title'        => __( 'Track Details', 'jt-practice-player' ),
+			'object_types' => array( TRACK_POST_TYPE ),
+			'context'      => 'normal',
+			'priority'     => 'high',
+			'closed'       => false,
+		)
+	);
+
+	$cmb->add_field(
+		array(
+			'name'       => __( 'Audio URL', 'jt-practice-player' ),
+			'desc'       => __( 'Direct link to the audio file. Required: the players skip any track without a valid http(s) URL.', 'jt-practice-player' ),
+			'id'         => TRACK_URL_META_KEY,
+			'type'       => 'text_url',
+			'attributes' => [
+				'class' => 'cmb2-text-url cmb2-text-large regular-text',
+			],
+			// Sanitization is handled by sanitize_track_meta().
+			'sanitization_cb' => false,
+		)
+	);
+
+	$cmb->add_field(
+		array(
+			'name'            => __( 'Duration', 'jt-practice-player' ),
+			'desc'            => __( 'Display only, as m:ss (e.g. 4:10). The player reads real duration from the file.', 'jt-practice-player' ),
+			'id'              => TRACK_DURATION_META_KEY,
+			'type'            => 'text_small',
+			// Sanitization is handled by sanitize_track_meta().
+			'sanitization_cb' => false,
+		)
+	);
+
+	$cmb->add_field(
+		array(
+			'name'            => __( 'Artwork', 'jt-practice-player' ),
+			'desc'            => __( 'Pick from the media library or paste an external image URL.', 'jt-practice-player' ),
+			'id'              => TRACK_ARTWORK_META_KEY,
+			'type'            => 'file',
+			'preview_size'    => array( 120, 120 ),
+			'query_args'      => array( 'type' => 'image' ),
+			'text'            => array(
+				'add_upload_file_text' => __( 'Choose or paste image URL', 'jt-practice-player' ),
+			),
+			// Sanitization is handled by sanitize_track_meta(). Disabling CMB2's
+			// pass also skips CMB2_Sanitize::file(), the only thing that writes a
+			// `_jtpp_track_artwork_id` companion meta no other writer here knows about.
+			'sanitization_cb' => false,
+		)
+	);
+
+	$cmb->add_field(
+		array(
+			'name'            => __( 'Lyrics', 'jt-practice-player' ),
+			'desc'            => __( 'Plain text. Blank lines separate stanzas in the lyrics modal.', 'jt-practice-player' ),
+			'id'              => TRACK_LYRICS_META_KEY,
+			'type'            => 'textarea_code',
+			'options' => array( 'disable_codemirror' => true ),
+			// 'attributes'      => array( 'rows' => 18 ),
+			// Sanitization is handled by sanitize_track_meta().
+			'sanitization_cb' => false,
+		)
+	);
+
+	// Derived from the audio URL and deliberately stable afterwards, because
+	// saved loop cues are keyed to it. 'save_field' => false makes CMB2 read
+	// and discard the posted value (CMB2_Field::save_field()), so 'readonly'
+	// here is a UI affordance rather than the actual guard.
+	$cmb->add_field(
+		array(
+			'name'       => __( 'Track GUID', 'jt-practice-player' ),
+			'desc'       => __( 'Derived from the audio URL on first save, then frozen so saved loop cues keep matching. Not editable.', 'jt-practice-player' ),
+			'id'         => TRACK_GUID_META_KEY,
+			'type'       => 'text_medium',
+			'save_field' => false,
+			'attributes' => array( 'readonly' => 'readonly' ),
+		)
+	);
+}
+
+/**
+ * Backfill the GUID after CMB2 stores a track URL.
+ *
+ * wp_insert_post() fires save_post_{$post_type} before CMB2's own save_post
+ * handler, so on a wp-admin save save_track_guid() would run while the URL meta
+ * still holds the pre-save value (or nothing at all, on a new track). This runs
+ * after the URL is written. save_track_guid() only fills an empty GUID, so
+ * re-saving with a changed URL still leaves an established GUID alone.
+ *
+ * @param bool                    $updated Whether the URL value changed.
+ * @param string                  $action  CMB2 save action.
+ * @param \CMB2_Field|object|null $field   The saved field.
+ */
+function cmb2_backfill_track_guid( $updated, $action, $field ): void {
+	if ( ! $updated || ! is_object( $field ) ) {
+		return;
+	}
+
+	// CMB2_Base serves object_id through __get() and implements no __isset(),
+	// so empty()/isset() on it report the property as absent even when it holds
+	// a real ID. Read it straight instead.
+	$object_id = (int) $field->object_id;
+	if ( $object_id < 1 ) {
+		return;
+	}
+
+	$post = get_post( $object_id );
+	if ( $post && TRACK_POST_TYPE === $post->post_type ) {
+		save_track_guid( $object_id, $post );
 	}
 }
 

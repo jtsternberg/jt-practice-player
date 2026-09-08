@@ -743,6 +743,28 @@
 	background: color-mix(in srgb, var(--jtpp-loop) 72%, transparent);
 }
 
+// Give fingers a wider grip around each boundary while keeping the exact
+// cut visible. Extend mostly outside the loop so short selections retain
+// separate start/end targets.
+@media (max-width: 600px), (pointer: coarse) {
+
+	.jtpp-waveform ::part(region-handle) {
+		width: 32px;
+		border: 0;
+		touch-action: none;
+	}
+
+	.jtpp-waveform ::part(region-handle-left) {
+		transform: translateX(-75%);
+		background: linear-gradient(to right, transparent 22px, var(--jtpp-loop) 22px, var(--jtpp-loop) 26px, transparent 26px);
+	}
+
+	.jtpp-waveform ::part(region-handle-right) {
+		transform: translateX(75%);
+		background: linear-gradient(to right, transparent 6px, var(--jtpp-loop) 6px, var(--jtpp-loop) 10px, transparent 10px);
+	}
+}
+
 .jtpp-region-clear {
 	position: absolute;
 	z-index: 30;

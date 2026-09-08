@@ -978,7 +978,7 @@
 	grid-template-columns: minmax(120px, 1fr) minmax(74px, auto) auto auto;
 	align-items: center;
 	gap: 10px;
-	padding: 9px 10px;
+	padding: 4px 10px;
 }
 
 .jtpp-loop-saved-header {
@@ -988,6 +988,15 @@
 	font-weight: 800;
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
+}
+
+// Keep saved cues from growing the docked player over the playlist. Scroll
+// the rows themselves so every cue remains reachable, including on phones
+// with browser chrome visible and in fullscreen loop editing.
+.jtpp-loop-cues {
+	max-height: min(180px, 20svh);
+	overflow-y: auto;
+	-webkit-overflow-scrolling: touch;
 }
 
 .jtpp-loop-cue + .jtpp-loop-cue {
@@ -1005,16 +1014,15 @@
 
 .jtpp-loop-cue-copy strong {
 	display: block;
-	overflow-wrap: anywhere;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	font-size: 0.9rem;
 	font-weight: 700;
 }
 
 .jtpp-loop-cue-copy small {
-	display: block;
-	margin-top: 2px;
-	color: var(--jtpp-muted);
-	font-size: 0.76rem;
+	display: none;
 }
 
 .jtpp-loop-cue-range {
@@ -1901,8 +1909,32 @@
 		display: none;
 	}
 
+	.jtpp-loop-summary {
+		min-height: 28px;
+		gap: 5px;
+		padding: 0 3px 0 8px;
+		font-size: 0.75rem;
+	}
+
+	.jtpp-loop-label {
+		font-size: 0.64rem;
+		letter-spacing: 0.04em;
+	}
+
+	.jtpp .jtpp-loop-clear {
+		width: 22px;
+		height: 22px;
+	}
+
+	.jtpp .jtpp-loop-cue-restore {
+		padding: 2px 8px;
+		font-size: 0.7rem;
+		line-height: 1.2;
+	}
+
 	.jtpp-loop-cue {
-		grid-template-columns: 1fr auto auto;
+		grid-template-columns: minmax(0, 1fr) auto auto;
+		gap: 6px;
 	}
 
 	.jtpp-loop-cue-range {
@@ -1930,17 +1962,6 @@
 	// Reclaim vertical space: a shorter waveform on tiny screens.
 	.jtpp-waveform {
 		height: 84px;
-	}
-
-	// Stack the cue: name/meta across the top, Restore + Delete sharing the
-	// row beneath so neither button gets crushed.
-	.jtpp-loop-cue {
-		grid-template-columns: 1fr auto;
-		gap: 6px 8px;
-	}
-
-	.jtpp-loop-cue-copy {
-		grid-column: 1 / -1;
 	}
 
 	.jtpp .jtpp-loop-cue-restore,

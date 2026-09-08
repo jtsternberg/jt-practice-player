@@ -2441,6 +2441,9 @@ export class PracticePlayer {
 
 				const name = document.createElement( 'strong' );
 				name.textContent = loop.name;
+				name.title = `${ loop.name } (${ formatTime(
+					loop.start
+				) }-${ formatTime( loop.end ) }, ${ loop.rate || 1 }x)`;
 				copy.append( name );
 
 				const meta = document.createElement( 'small' );

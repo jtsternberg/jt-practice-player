@@ -14,3 +14,7 @@
 node_modules/
 vendor/
 .phpunit.result.cache
+
+# Local agent deployment notes.
+/.claude/CLAUDE.md
+AGENTS.override.md

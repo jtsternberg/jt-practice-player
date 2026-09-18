@@ -100,6 +100,34 @@ The player also exposes scoped CSS custom properties:
 }
 ```
 
+## Agent & Automation Access
+
+The track registry (the `jtpp_track` post type behind playlist blocks) is scriptable three ways.
+
+**REST** — namespace `jtpp/v1`:
+
+- `GET /jtpp/v1/tracks?search=` — search the registry.
+- `POST /jtpp/v1/tracks` — create or update a track.
+- `GET /jtpp/v1/tracks/<id>` — read one track.
+
+**WP-CLI**:
+
+- `wp jtpp track create|get|list|update|delete` — CRUD for registry tracks.
+- `wp jtpp migrate-tracks [--write] [--post_id=<id>]` — convert inline external track refs in post content to central registry refs. Defaults to a dry run.
+
+**Abilities API** — requires WordPress 6.9+. These are registered in the `jtpp` category and exposed over the `wp-abilities/v1` REST namespace, so agents such as WPVibe can discover and run them:
+
+| Ability | What it does |
+| --- | --- |
+| `jtpp/list-tracks` | Search the registry by title/artist/album text or exact audio URL. |
+| `jtpp/get-track` | Read one track by ID, including its stable player guid. |
+| `jtpp/create-track` | Register a new track from an audio URL plus optional metadata. |
+| `jtpp/update-track` | Partially update a track; unsupplied fields are preserved. |
+| `jtpp/delete-track` | Trash or permanently delete a track; refuses referenced tracks unless `allowReferenced` is set. |
+| `jtpp/migrate-track-refs` | Dry-run or write the inline-to-registry ref migration. |
+
+All of the above require the `edit_posts` capability (`delete_post` on the track for `jtpp/delete-track`, and `manage_options` for `jtpp/migrate-track-refs`), and share the same validation, sanitization, and guid rules as the block editor.
+
 ## Requirements
 
 - WordPress 6.1+

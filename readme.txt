@@ -4,7 +4,7 @@ Tags: audio, playlist, waveform, loop, practice
 Requires at least: 6.1
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 0.1.0
+Stable tag: 0.2.0
 License: GPLv2 or later
 
 Audio playlist and single-track blocks with waveform display and A-B section looping, for band practice.

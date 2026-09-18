@@ -43,7 +43,12 @@ function wp_get_attachment_url() { return false; }
 function wp_get_attachment_metadata() { return array(); }
 function get_post_thumbnail_id() { return 0; }
 function wp_get_attachment_image_src() { return false; }
-function get_the_title( $id ) { return 'Post ' . $id; }
+function get_the_title( $id ) {
+	$title = $GLOBALS['jtpp_test_posts'][ $id ]->post_title ?? '';
+	return '' !== $title ? $title : 'Post ' . $id;
+}
+function current_user_can() { return true; }
+function has_blocks( $content = '' ) { return false !== strpos( (string) $content, '<!-- wp:' ); }
 function wp_enqueue_script() {}
 function wp_enqueue_style() {}
 function get_site_icon_url( $size = 512 ) { return 'https://example.test/icon.png'; }
@@ -114,6 +119,96 @@ function get_post_meta( $id, $key, $single = false ) {
 function update_post_meta( $id, $key, $value ) {
 	$GLOBALS['jtpp_test_meta'][ $id ][ $key ] = $value;
 }
+/**
+ * Minimal get_posts() over the in-memory post store. Supports the argument
+ * shapes this plugin actually uses: post_type (incl. 'any'), post_status,
+ * posts_per_page, fields=ids, meta_key/meta_value, 's' text search,
+ * post__not_in, and orderby=title.
+ */
+function get_posts( $args = array() ) {
+	$args = array_merge(
+		array(
+			'post_type'      => 'post',
+			'post_status'    => array( 'publish' ),
+			'posts_per_page' => -1,
+			'fields'         => '',
+			's'              => '',
+			'post__not_in'   => array(),
+			'orderby'        => '',
+			'order'          => 'ASC',
+		),
+		$args
+	);
+
+	$types    = 'any' === $args['post_type'] ? null : (array) $args['post_type'];
+	$statuses = (array) $args['post_status'];
+	$exclude  = array_map( 'intval', (array) $args['post__not_in'] );
+	$search   = (string) $args['s'];
+	$found    = array();
+
+	foreach ( $GLOBALS['jtpp_test_posts'] as $id => $post ) {
+		if ( in_array( (int) $id, $exclude, true ) ) {
+			continue;
+		}
+		if ( null !== $types && ! in_array( $post->post_type ?? '', $types, true ) ) {
+			continue;
+		}
+		if ( $statuses && ! in_array( $post->post_status ?? 'publish', $statuses, true ) ) {
+			continue;
+		}
+		if ( ! empty( $args['meta_key'] ) ) {
+			$meta = $GLOBALS['jtpp_test_meta'][ $id ][ $args['meta_key'] ] ?? '';
+			if ( (string) $meta !== (string) ( $args['meta_value'] ?? '' ) ) {
+				continue;
+			}
+		}
+		if ( '' !== $search ) {
+			$haystack = ( $post->post_title ?? '' ) . "\n" . ( $post->post_content ?? '' );
+			if ( false === stripos( $haystack, $search ) ) {
+				continue;
+			}
+		}
+		$found[] = $post;
+	}
+
+	if ( 'title' === $args['orderby'] ) {
+		usort(
+			$found,
+			static function ( $a, $b ) {
+				return strcasecmp( $a->post_title ?? '', $b->post_title ?? '' );
+			}
+		);
+	}
+
+	$limit = (int) $args['posts_per_page'];
+	if ( 0 < $limit ) {
+		$found = array_slice( $found, 0, $limit );
+	}
+
+	if ( 'ids' === $args['fields'] ) {
+		return array_map(
+			static function ( $post ) {
+				return (int) $post->ID;
+			},
+			$found
+		);
+	}
+
+	return $found;
+}
+
+$GLOBALS['jtpp_test_abilities']          = array();
+$GLOBALS['jtpp_test_ability_categories'] = array();
+
+function wp_register_ability( $name, $args ) {
+	$GLOBALS['jtpp_test_abilities'][ $name ] = $args;
+	return $args;
+}
+function wp_register_ability_category( $slug, $args ) {
+	$GLOBALS['jtpp_test_ability_categories'][ $slug ] = $args;
+	return $args;
+}
+
 function get_the_terms( $id, $taxonomy ) {
 	return $GLOBALS['jtpp_test_terms'][ $id ][ $taxonomy ] ?? array();
 }

@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       JT Practice Player
  * Description:       Audio playlist and single-track blocks with waveform display and A-B section looping, for band practice.
- * Version:           0.1.0
+ * Version:           0.2.0
  * Requires at least: 6.1
  * Requires PHP:      7.4
  * Author:            Justin Sternberg
@@ -14,7 +14,7 @@ namespace JTPP;
 
 defined( 'ABSPATH' ) || exit;
 
-const JTPP_VERSION = '0.1.0';
+const JTPP_VERSION = '0.2.0';
 const USER_LOOP_CUES_META_KEY = 'jtpp_saved_loop_cues';
 const USER_LOOP_CUES_LIMIT    = 20;
 const TRACK_POST_TYPE         = 'jtpp_track';
@@ -25,6 +25,8 @@ const TRACK_GUID_META_KEY     = '_jtpp_track_guid';
 const TRACK_DURATION_META_KEY = '_jtpp_track_duration';
 const TRACK_ARTWORK_META_KEY  = '_jtpp_track_artwork';
 const TRACK_LYRICS_META_KEY   = '_jtpp_track_lyrics';
+
+require_once __DIR__ . '/includes/abilities.php';
 
 add_action( 'init', __NAMESPACE__ . '\\register' );
 add_action( 'save_post_' . TRACK_POST_TYPE, __NAMESPACE__ . '\\save_track_guid', 10, 2 );
@@ -925,62 +927,25 @@ class CLI_Migrate_Tracks_Command {
 	 *     wp jtpp migrate-tracks --url=https://example.test --write
 	 */
 	public function __invoke( array $args, array $assoc_args ): void {
-		$write   = ! empty( $assoc_args['write'] );
-		$post_id = isset( $assoc_args['post_id'] ) ? (int) $assoc_args['post_id'] : 0;
-		$posts   = $post_id ? array_filter( array( get_post( $post_id ) ) ) : get_posts(
-			array(
-				'post_type'      => 'any',
-				'post_status'    => array( 'publish', 'draft', 'private', 'future' ),
-				'posts_per_page' => -1,
-				's'              => 'wp:jtpp/',
-			)
-		);
-		$totals  = array(
-			'posts'     => 0,
-			'converted' => 0,
-			'existing'  => 0,
-			'created'   => 0,
-			'dry_create' => 0,
-			'skipped'   => 0,
-		);
+		$write  = ! empty( $assoc_args['write'] );
+		$report = migrate_all_track_refs( $write, isset( $assoc_args['post_id'] ) ? (int) $assoc_args['post_id'] : 0 );
 
-		foreach ( $posts as $post ) {
-			if ( ! has_blocks( $post->post_content ) ) {
-				continue;
-			}
-
-			$result = migrate_track_refs_in_content( $post->post_content, $write );
-			if ( ! $result['converted'] && ! $result['dry_create'] && ! $result['skipped'] ) {
-				continue;
-			}
-
-			$totals['posts']++;
-			foreach ( array( 'converted', 'existing', 'created', 'dry_create', 'skipped' ) as $key ) {
-				$totals[ $key ] += $result[ $key ];
-			}
-
+		foreach ( $report['posts'] as $entry ) {
 			\WP_CLI::log(
 				sprintf(
 					'%s post %d: converted=%d existing=%d created=%d dry-create=%d skipped=%d',
 					$write ? 'Updated' : 'Would update',
-					$post->ID,
-					$result['converted'],
-					$result['existing'],
-					$result['created'],
-					$result['dry_create'],
-					$result['skipped']
+					$entry['postId'],
+					$entry['converted'],
+					$entry['existing'],
+					$entry['created'],
+					$entry['dryCreate'],
+					$entry['skipped']
 				)
 			);
-
-			if ( $write && $result['changed'] ) {
-				wp_update_post(
-					array(
-						'ID'           => $post->ID,
-						'post_content' => $result['content'],
-					)
-				);
-			}
 		}
+
+		$totals = $report['totals'];
 
 		\WP_CLI::success(
 			sprintf(
@@ -990,7 +955,7 @@ class CLI_Migrate_Tracks_Command {
 				$totals['converted'],
 				$totals['existing'],
 				$totals['created'],
-				$totals['dry_create'],
+				$totals['dryCreate'],
 				$totals['skipped']
 			)
 		);
@@ -1275,6 +1240,82 @@ class CLI_Track_Command {
 		}
 		return $fields;
 	}
+}
+
+/**
+ * Convert inline external track refs to central registry refs across posts.
+ *
+ * Shared by the `wp jtpp migrate-tracks` CLI command and the
+ * `jtpp/migrate-track-refs` ability so both use identical selection,
+ * conversion, and write rules. With $write false nothing is persisted; the
+ * report shows what a write run would do (`dryCreate` counts registry tracks
+ * that would be created).
+ *
+ * @param bool $write   Persist converted post content. Defaults to a dry run.
+ * @param int  $post_id Limit migration to one post. 0 scans all posts.
+ * @return array{write:bool,posts:array<int,array>,totals:array<string,int>}
+ */
+function migrate_all_track_refs( bool $write = false, int $post_id = 0 ): array {
+	$posts = $post_id ? array_filter( array( get_post( $post_id ) ) ) : get_posts(
+		array(
+			'post_type'      => 'any',
+			'post_status'    => array( 'publish', 'draft', 'private', 'future' ),
+			'posts_per_page' => -1,
+			's'              => 'wp:jtpp/',
+		)
+	);
+
+	$report = array(
+		'write'  => $write,
+		'posts'  => array(),
+		'totals' => array(
+			'posts'     => 0,
+			'converted' => 0,
+			'existing'  => 0,
+			'created'   => 0,
+			'dryCreate' => 0,
+			'skipped'   => 0,
+		),
+	);
+
+	foreach ( $posts as $post ) {
+		if ( ! has_blocks( $post->post_content ) ) {
+			continue;
+		}
+
+		$result = migrate_track_refs_in_content( $post->post_content, $write );
+		if ( ! $result['converted'] && ! $result['dry_create'] && ! $result['skipped'] ) {
+			continue;
+		}
+
+		$report['totals']['posts']++;
+		$report['totals']['converted'] += (int) $result['converted'];
+		$report['totals']['existing']  += (int) $result['existing'];
+		$report['totals']['created']   += (int) $result['created'];
+		$report['totals']['dryCreate'] += (int) $result['dry_create'];
+		$report['totals']['skipped']   += (int) $result['skipped'];
+
+		$report['posts'][] = array(
+			'postId'    => (int) $post->ID,
+			'converted' => (int) $result['converted'],
+			'existing'  => (int) $result['existing'],
+			'created'   => (int) $result['created'],
+			'dryCreate' => (int) $result['dry_create'],
+			'skipped'   => (int) $result['skipped'],
+			'changed'   => (bool) $result['changed'],
+		);
+
+		if ( $write && $result['changed'] ) {
+			wp_update_post(
+				array(
+					'ID'           => $post->ID,
+					'post_content' => $result['content'],
+				)
+			);
+		}
+	}
+
+	return $report;
 }
 
 function migrate_track_refs_in_content( string $content, bool $write = false ): array {
